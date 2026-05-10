@@ -38,8 +38,12 @@ readme_intro_locked/
 # Local docs not intended for publication
 docs/
 
-# API keys
+# API keys and secrets
 key.md
+*.key
+.env
+.env.*
+.env.local
 
 # OS files
 .DS_Store
