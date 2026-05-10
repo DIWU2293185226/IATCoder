@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -m pytest tests/ -v --tb=short -p no:langsmith)",
+      "Bash(D:/Anaconda/python.exe -c \"import sys; sys.path = [p for p in sys.path if 'Roaming' not in p]; import opik; print\\(opik.__file__\\)\")",
+      "Bash(D:/Anaconda/python.exe -c \"import sys; sys.path = [p for p in sys.path if 'Roaming' not in p]; import langsmith; print\\(langsmith.__file__\\)\")"
+    ]
+  }
+}
