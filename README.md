@@ -23,20 +23,6 @@
   - OpenAI 兼容 Responses API
   - Anthropic 兼容 Messages API
 
-## 使用截图
-
-CLI 帮助信息：
-
-![help](assets/screenshots/iatcoder-help.png)
-
-启动界面：
-
-![start](assets/screenshots/iatcoder-start.png)
-
-REPL 内置命令与会话路径：
-
-![repl](assets/screenshots/iatcoder-repl.png)
-
 ## 安装
 
 需要 Python 3.10+。
