@@ -1,0 +1,196 @@
+# tool_executor.py: 工具执行的前置守卫 (guardrail).
+# 所有工具调用在这里经过 6 道检查后才会真正执行:
+#   1. 工具是否存在
+#   2. 参数是否合法
+#   3. 是否重复的 tool call
+#   4. PermissionChecker (审批策略 / plan mode / write_scope / read_only)
+#   5. ToolPolicyChecker (prior-read 要求 / 路径约束)
+#   6. 执行 + 工作区快照 diff + 内存更新
+# run_tool() 由 Iatcoder.run_tool() 委托调用, 后者由 Engine 每轮触发.
+
+import re
+
+from .tool_policy import ToolPolicyChecker
+from .tool_repetition import repeated_tool_call_metadata
+from .workspace import clip
+
+INLINE_TOOL_OUTPUT_LIMIT = 1000
+
+
+def run_tool(agent, name, args):
+    """工具执行守卫: 校验 -> 权限 -> 策略 -> 执行 -> 快照 diff -> 内存.
+
+    6 道关卡:
+    [1] 工具存在
+    [2] 参数合法
+    [3] 非重复调用
+    [4] PermissionChecker (approval/plan_mode/write_scope)
+    [5] ToolPolicyChecker (prior_read/path_constraints)
+    [6] 执行 + 结果渲染 + 工作区 diff + 内存更新
+    """
+    tool = agent.tools.get(name)
+    if tool is None:
+        agent._last_tool_result_metadata = {
+            "tool_status": "rejected",
+            "tool_error_code": "unknown_tool",
+            "security_event_type": "",
+            "risk_level": "high",
+            "read_only": False,
+            "affected_paths": [],
+            "workspace_changed": False,
+            "diff_summary": [],
+        }
+        return f"error: unknown tool '{name}'"
+    # [1] 工具存在性检查
+    # [2] 参数合法性检查 (validate_tool 会校验 schema 类型/必填/路径逃逸)
+    try:
+        agent.validate_tool(name, args)
+    except Exception as exc:
+        example = agent.tool_example(name)
+        message = f"error: invalid arguments for {name}: {exc}"
+        if example:
+            message += f"\nexample: {example}"
+        security_event_type = "path_escape" if "path escapes workspace" in str(exc) else ""
+        agent._last_tool_result_metadata = {
+            "tool_status": "rejected",
+            "tool_error_code": "invalid_arguments",
+            "security_event_type": security_event_type,
+            "risk_level": "high" if tool.risky else "low",
+            "read_only": tool.read_only,
+            "affected_paths": [],
+            "workspace_changed": False,
+            "diff_summary": [],
+        }
+        return message
+    # [3] 重复调用检测: 连续相同 tool + args 会被拦截
+    if agent.repeated_tool_call(name, args):
+        agent._last_tool_result_metadata = repeated_tool_call_metadata(tool)
+        return f"error: repeated identical tool call for {name}; choose a different tool or return a final answer"
+    # [4] PermissionChecker: approval 策略 / plan mode 约束 / write_scope / read_only
+    decision = agent.permission_checker.check(tool, args)
+    _emit_permission_decision(agent, tool, args, decision)
+    if not decision.allowed:
+        agent._last_tool_result_metadata = {
+            "tool_status": "rejected",
+            "tool_error_code": decision.reason,
+            "security_event_type": decision.security_event_type,
+            "risk_level": "high" if tool.risky else "low",
+            "read_only": tool.read_only,
+            "affected_paths": [],
+            "workspace_changed": False,
+            "diff_summary": [],
+        }
+        return _permission_error(agent, tool, decision)
+    # [5] ToolPolicyChecker: prior_read 要求 (写文件前必须先读) / 路径约束
+    policy = ToolPolicyChecker(agent).check(tool, args)
+    _emit_tool_policy_decision(agent, tool, args, policy)
+    if not policy.allowed:
+        agent._last_tool_result_metadata = {
+            "tool_status": "rejected",
+            "tool_error_code": policy.reason,
+            "security_event_type": "tool_policy",
+            "risk_level": "high" if tool.risky else "low",
+            "read_only": tool.read_only,
+            "affected_paths": [],
+            "workspace_changed": False,
+            "diff_summary": [],
+        }
+        agent.record_process_note_for_tool(name, agent._last_tool_result_metadata)
+        return policy.message
+    # [6] 执行: 快照前 -> 执行 -> 结果渲染 -> 快照后 -> diff -> 内存更新
+    before_snapshot = agent.capture_workspace_snapshot() if tool.risky else {}
+    after_snapshot = before_snapshot
+    try:
+        full_result = tool.execute(args).content
+        result, full_output_artifact = _render_tool_result(agent, name, full_result)
+        after_snapshot = agent.capture_workspace_snapshot() if tool.risky else before_snapshot
+        affected_paths, diff_summary = agent.diff_workspace_snapshots(before_snapshot, after_snapshot)
+        workspace_changed = bool(affected_paths)
+        tool_status = "ok"
+        tool_error_code = ""
+        if name == "run_shell":
+            match = re.search(r"exit_code:\s*(-?\d+)", result)
+            exit_code = int(match.group(1)) if match else 0
+            if exit_code != 0 and workspace_changed:
+                tool_status = "partial_success"
+                tool_error_code = "tool_partial_success"
+            elif exit_code != 0:
+                tool_status = "error"
+                tool_error_code = "tool_failed"
+        agent.update_memory_after_tool(name, args, result)
+        agent._last_tool_result_metadata = {
+            "tool_status": tool_status,
+            "tool_error_code": tool_error_code,
+            "security_event_type": "",
+            "risk_level": "high" if tool.risky else "low",
+            "read_only": tool.read_only,
+            "affected_paths": affected_paths,
+            "workspace_changed": workspace_changed,
+            "workspace_fingerprint": agent.workspace.fingerprint(),
+            "diff_summary": diff_summary,
+            "full_output_artifact": full_output_artifact,
+        }
+        agent.record_process_note_for_tool(name, agent._last_tool_result_metadata)
+        return result
+    except Exception as exc:
+        after_snapshot = agent.capture_workspace_snapshot() if tool.risky else before_snapshot
+        affected_paths, diff_summary = agent.diff_workspace_snapshots(before_snapshot, after_snapshot)
+        workspace_changed = bool(affected_paths)
+        security_event_type = "path_escape" if "path escapes workspace" in str(exc) else ""
+        agent._last_tool_result_metadata = {
+            "tool_status": "partial_success" if workspace_changed else "error",
+            "tool_error_code": "tool_partial_success" if workspace_changed else "tool_failed",
+            "security_event_type": security_event_type,
+            "risk_level": "high" if tool.risky else "low",
+            "read_only": tool.read_only,
+            "affected_paths": affected_paths,
+            "workspace_changed": workspace_changed,
+            "workspace_fingerprint": agent.workspace.fingerprint(),
+            "diff_summary": diff_summary,
+        }
+        agent.record_process_note_for_tool(name, agent._last_tool_result_metadata)
+        return f"error: tool {name} failed: {exc}"
+
+
+def _render_tool_result(agent, name, full_result):
+    full_result = str(full_result)
+    if name != "run_shell" or len(full_result) <= INLINE_TOOL_OUTPUT_LIMIT:
+        return clip(full_result), ""
+    if not getattr(agent, "current_task_state", None):
+        return clip(full_result, INLINE_TOOL_OUTPUT_LIMIT), ""
+    path = agent.run_store.write_text_artifact(agent.current_task_state, f"{name}-output", full_result)
+    relative = path.relative_to(agent.root).as_posix()
+    return f"full output saved: {relative}\n" + clip(full_result, INLINE_TOOL_OUTPUT_LIMIT), relative
+
+
+def _emit_permission_decision(agent, tool, args, decision):
+    agent.session_event_bus.emit(
+        "permission_decision",
+        {
+            "tool_name": tool.name,
+            "decision": decision.decision,
+            "reason": decision.reason,
+            "security_event_type": decision.security_event_type,
+            "tool_profile": agent.active_tool_profile.name,
+            "args": args or {},
+        },
+    )
+
+
+def _emit_tool_policy_decision(agent, tool, args, decision):
+    agent.session_event_bus.emit(
+        "tool_policy_decision",
+        {"tool_name": tool.name, "decision": decision.decision, "reason": decision.reason, "args": args or {}},
+    )
+
+
+def _permission_error(agent, tool, decision):
+    if decision.reason == "plan_mode_path_mismatch":
+        return f"error: plan mode can only write the active plan artifact ({agent.plan_mode.plan_path})"
+    if decision.reason == "plan_mode_tool_not_allowed":
+        return f"error: plan mode only allows read-only tools or writing the active plan artifact ({agent.plan_mode.plan_path})"
+    if decision.reason == "write_scope_mismatch":
+        return f"error: worker write_scope does not allow {tool.name} on this path"
+    if decision.reason in {"approval_denied", "tool_not_allowed"}:
+        return f"error: approval denied for {tool.name}"
+    return f"error: permission denied for {tool.name}: {decision.reason}"
