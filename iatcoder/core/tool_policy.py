@@ -1,4 +1,8 @@
-"""Tool usage policy checks above raw permission gates."""
+"""工具使用策略检查。
+
+在 PermissionChecker 之上增加额外约束：
+写文件前必须先读（prior_read_required）、
+shell 搜索应使用专用工具而非 run_shell。"""
 
 import re
 from dataclasses import dataclass
@@ -20,22 +24,27 @@ class ToolPolicyDecision:
 
     @classmethod
     def allow(cls, reason="policy_ok"):
+        """创建允许通过的策略决定。"""
         return cls("allow", reason)
 
     @classmethod
     def deny(cls, reason, message):
+        """创建拒绝执行的策略决定。"""
         return cls("deny", reason, message)
 
     @property
     def allowed(self):
+        """判断该决定是否允许执行。"""
         return self.decision == "allow"
 
 
 class ToolPolicyChecker:
     def __init__(self, runtime):
+        """初始化策略检查器，绑定 runtime。"""
         self.runtime = runtime
 
     def check(self, tool, args):
+        """检查工具调用是否符合额外策略约束。"""
         args = args or {}
         if self.runtime.runtime_mode == "plan":
             return ToolPolicyDecision.allow("plan_mode")
@@ -55,6 +64,7 @@ class ToolPolicyChecker:
         return ToolPolicyDecision.allow()
 
     def _has_fresh_read(self, path):
+        """检查目标路径是否已有新鲜的读缓存。"""
         canonical = self.runtime.memory.canonical_path(path)
         summary = self.runtime.memory.to_dict().get("file_summaries", {}).get(canonical, {})
         if summary and summary.get("freshness") == memorylib.file_freshness(canonical, self.runtime.root):
@@ -64,6 +74,7 @@ class ToolPolicyChecker:
 
     @staticmethod
     def _prior_read_required(tool_name, path):
+        """返回"先读后写"的拒绝决定。"""
         return ToolPolicyDecision.deny(
             "prior_read_required",
             f"error: {tool_name} requires a fresh read_file of {path} before modifying it",

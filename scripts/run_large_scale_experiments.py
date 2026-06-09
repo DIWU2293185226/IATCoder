@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""运行大规模实验：在多个模型/配置组合上执行 benchmark。"""
 import argparse
 import json
 import sys

@@ -1,12 +1,12 @@
-# tool_executor.py: 工具执行的前置守卫 (guardrail).
-# 所有工具调用在这里经过 6 道检查后才会真正执行:
-#   1. 工具是否存在
-#   2. 参数是否合法
-#   3. 是否重复的 tool call
-#   4. PermissionChecker (审批策略 / plan mode / write_scope / read_only)
-#   5. ToolPolicyChecker (prior-read 要求 / 路径约束)
-#   6. 执行 + 工作区快照 diff + 内存更新
-# run_tool() 由 Iatcoder.run_tool() 委托调用, 后者由 Engine 每轮触发.
+"""工具执行守卫 (guardrail)。
+
+所有工具调用在这里经过 6 道检查后才会真正执行：
+[1] 工具是否存在
+[2] 参数是否合法
+[3] 是否重复的 tool call
+[4] PermissionChecker（审批策略 / plan mode / write_scope / read_only）
+[5] ToolPolicyChecker（prior-read 要求 / 路径约束）
+[6] 执行 + 工作区快照 diff + 内存更新"""
 
 import re
 

@@ -1,4 +1,7 @@
-"""Runtime artifact graph and verifier suggestion helpers."""
+"""运行时工件图和验证建议。
+
+分析本轮修改的文件路径，生成分类后的工件图，
+并基于项目依赖文件（package.json、pyproject.toml 等）推荐验证命令。"""
 
 import json
 import re

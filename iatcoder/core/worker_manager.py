@@ -1,4 +1,6 @@
-"""Session-scoped worker lifecycle for subagents."""
+"""子 agent（worker）生命周期管理。
+
+管理后台 worker 线程的创建、启动、停止和通知分发。"""
 
 import json
 import queue
@@ -25,6 +27,7 @@ class WorkerTask:
 
 class WorkerManager:
     def __init__(self, runtime):
+        """初始化 WorkerManager，准备任务字典和通知队列"""
         self.runtime = runtime
         self.runtime.session.setdefault("workers", {"next_id": 1, "items": []})
         self._tasks = {}
@@ -33,9 +36,11 @@ class WorkerManager:
 
     @property
     def state(self):
+        """获取当前 worker 状态字典"""
         return self.runtime.session.setdefault("workers", {"next_id": 1, "items": []})
 
     def spawn(self, description, prompt, subagent_type="worker", write_scope=None):
+        """创建并启动一个新 worker 任务"""
         subagent_type = _clean_type(subagent_type)
         if self.runtime.runtime_mode == "plan" and subagent_type != "Explore":
             raise ValueError("plan mode only allows Explore agents")
@@ -48,6 +53,7 @@ class WorkerManager:
         return self._public_payload(task)
 
     def continue_task(self, task_id, message):
+        """继续执行已暂停的 worker 任务"""
         task = self._get_active_task(task_id)
         item = self._get_item(task_id)
         if item.get("status") in {"running", "stopping"}:
@@ -61,6 +67,7 @@ class WorkerManager:
         return self._public_payload(task)
 
     def stop_task(self, task_id):
+        """请求停止正在运行的 worker 任务"""
         item = self._get_item(task_id)
         if item["status"] == "running":
             task = self._tasks.get(str(task_id))
@@ -79,6 +86,7 @@ class WorkerManager:
         }
 
     def shutdown(self, timeout=2.0):
+        """优雅关闭所有 worker 线程"""
         tasks = list(self._tasks.values())
         for task in tasks:
             item = self._get_item(task.id)
@@ -104,12 +112,14 @@ class WorkerManager:
         return {"stopped": sum(1 for task in tasks if task.stop_requested)}
 
     def to_dict(self):
+        """导出 worker 状态为字典"""
         return {
             "next_id": int(self.state.get("next_id", 1)),
             "items": [dict(item) for item in self.state.get("items", [])],
         }
 
     def _new_task(self, description, subagent_type, write_scope):
+        """创建 WorkerTask 对象并注册到状态中"""
         with self._lock:
             worker_id = f"agent_{int(self.state.get('next_id', 1))}"
             self.state["next_id"] = int(self.state.get("next_id", 1)) + 1
@@ -135,9 +145,11 @@ class WorkerManager:
         return WorkerTask(worker_id, item["description"], subagent_type, scope, child)
 
     def _can_run_background(self):
+        """检查是否支持后台线程运行 worker"""
         return getattr(self.runtime, "model_client_factory", None) is not None
 
     def _start_background(self, task, prompt, action):
+        """在后台线程中启动 worker"""
         thread = threading.Thread(
             target=run_worker,
             args=(self, task, prompt, action),
@@ -148,12 +160,14 @@ class WorkerManager:
         thread.start()
 
     def _request_stop(self, task):
+        """标记任务停止请求并中断当前执行"""
         task.stop_requested = True
         abort = getattr(task.runtime, "abort_current_turn", None)
         if callable(abort):
             abort()
 
     def drain_notifications(self):
+        """拉取所有待消费的 worker 通知"""
         drained = []
         while True:
             try:
@@ -172,18 +186,21 @@ class WorkerManager:
         return drained
 
     def _get_active_task(self, task_id):
+        """按 task_id 获取活跃的任务对象"""
         task = self._tasks.get(str(task_id))
         if task is None:
             raise ValueError(f"unknown or inactive worker: {task_id}")
         return task
 
     def _get_item(self, task_id):
+        """按 task_id 从持久化状态中获取 worker 条目"""
         for item in self.state.setdefault("items", []):
             if item.get("id") == str(task_id):
                 return item
         raise ValueError(f"unknown worker: {task_id}")
 
     def _public_payload(self, task, status=None):
+        """构造公开的 worker 状态载荷"""
         item = self._get_item(task.id)
         return {
             "task_id": task.id,
@@ -192,6 +209,7 @@ class WorkerManager:
         }
 
     def _save(self):
+        """持久化当前 session 状态"""
         self.runtime.session_path = self.runtime.session_store.save(
             self.runtime.session
         )

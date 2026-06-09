@@ -1,3 +1,4 @@
+"""安全不变性测试。"""
 import os
 import shlex
 import sys

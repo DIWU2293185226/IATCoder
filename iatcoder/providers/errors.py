@@ -1,4 +1,6 @@
-"""Structured provider failure types."""
+"""结构化 provider 错误类型。
+
+封装 HTTP/网络/协议错误，附带结构化元数据供 trace 记录。"""
 
 from urllib.parse import urlsplit, urlunsplit
 
@@ -19,6 +21,7 @@ class ProviderError(RuntimeError):
         body_excerpt="",
         cause_type="",
     ):
+        """初始化 ProviderError。"""
         super().__init__(message)
         self.provider = str(provider or "")
         self.model = str(model or "")
@@ -32,6 +35,7 @@ class ProviderError(RuntimeError):
         self.cause_type = str(cause_type or "")
 
     def to_metadata(self):
+        """将错误信息转换为字典格式用于 trace 记录。"""
         payload = {
             "provider_error": {
                 "code": self.code,
@@ -57,6 +61,7 @@ class ProviderError(RuntimeError):
 
 
 def _clip(value, limit):
+    """截断文本至指定长度。"""
     text = str(value or "")
     if len(text) <= limit:
         return text
@@ -64,6 +69,7 @@ def _clip(value, limit):
 
 
 def sanitize_url(value):
+    """从 URL 中移除敏感信息（只保留 scheme、host、path）。"""
     text = str(value or "")
     if not text:
         return ""

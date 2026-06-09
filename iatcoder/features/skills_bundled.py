@@ -1,4 +1,7 @@
-"""Built-in Iatcoder skills."""
+"""内置技能定义。
+
+内置了 simplify（代码简化）、review（代码审查）、
+commit（Git 提交）和 test（运行测试）四个技能。"""
 
 from __future__ import annotations
 
@@ -6,6 +9,7 @@ from .skills import Skill
 
 
 def bundled_skills():
+    """返回四个内置技能的定义。"""
     return [
         Skill(
             name="simplify",
@@ -74,6 +78,7 @@ def bundled_skills():
 
 
 def _with_optional_section(title, paragraphs, section_title):
+    """生成带可选参数节段的技能提示闭包。"""
     def render(arguments=""):
         lines = [title, "", *paragraphs]
         if arguments:

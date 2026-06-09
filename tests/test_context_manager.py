@@ -1,3 +1,4 @@
+"""ContextManager 单元测试。"""
 from iatcoder.testing import ScriptedModelClient
 from iatcoder import Iatcoder, SessionStore, WorkspaceContext
 from iatcoder.core.context_manager import ContextManager

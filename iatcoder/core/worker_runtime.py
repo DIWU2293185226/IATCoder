@@ -1,4 +1,7 @@
-"""Child runtime construction for worker tasks."""
+"""子 agent 运行时构建。
+
+创建子 Iatcoder 实例，继承父 agent 的配置但使用独立的
+approval 策略和 tool profile。"""
 
 from .workspace import WorkspaceContext
 

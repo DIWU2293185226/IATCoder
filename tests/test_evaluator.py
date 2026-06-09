@@ -1,3 +1,4 @@
+"""Evaulator 基准测试运行器的测试。"""
 import json
 from pathlib import Path
 from collections import Counter

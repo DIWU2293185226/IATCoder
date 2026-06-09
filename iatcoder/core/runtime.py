@@ -116,6 +116,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         sandbox_config=None,
         ask_user_callback=None,
     ):
+        """初始化 Iatcoder 运行时, 串联所有子系统。"""
         self.model_client = model_client
         self.model_client_factory = model_client_factory
         self.abort_requested = False
@@ -231,6 +232,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
 
     @classmethod
     def from_session(cls, model_client, workspace, session_store, session_id, **kwargs):
+        """从已有 session 恢复 Iatcoder 实例。"""
         return cls(
             model_client=model_client,
             workspace=workspace,
@@ -240,6 +242,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         )
 
     def _resolve_memory_dir(self, memory_dir):
+        """解析并校验 memory 目录路径, 必须在 workspace 内。"""
         if memory_dir:
             path = Path(memory_dir).expanduser()
             path = path if path.is_absolute() else self.root / path
@@ -251,6 +254,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return resolved
 
     def _ensure_session_shape(self):
+        """确保 session 字典包含所有必需的嵌套字段。"""
         self.session.setdefault("history", [])
         self.session.setdefault("memory", memorylib.default_memory_state())
         checkpoints = self.session.setdefault("checkpoints", {})
@@ -270,6 +274,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
             self.session["runtime_mode"] = {"mode": "default"}
 
     def current_runtime_identity(self):
+        """返回当前运行时身份的摘要字典。"""
         return {
             "session_id": self.session.get("id", ""),
             "cwd": str(self.root),
@@ -290,10 +295,12 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         }
 
     def checkpoint_state(self):
+        """返回 session 中的 checkpoint 状态字典。"""
         self._ensure_session_shape()
         return self.session["checkpoints"]
 
     def current_checkpoint(self):
+        """获取当前 checkpoint 对象, 若无则返回 None。"""
         state = self.checkpoint_state()
         checkpoint_id = str(state.get("current_id", "")).strip()
         if not checkpoint_id:
@@ -301,11 +308,13 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return state.get("items", {}).get(checkpoint_id)
 
     def invalidate_stale_memory(self):
+        """使过期的文件摘要失效, 返回失效的路径列表。"""
         invalidated = self.memory.invalidate_stale_file_summaries()
         self.session["memory"] = self.memory.to_dict()
         return invalidated
 
     def evaluate_resume_state(self):
+        """评估恢复状态: checkpoint 有效性、文件新鲜度、运行时一致性。"""
         previous_resume_state = dict(self.session.get("resume_state", {}) or {})
         invalidated = self.invalidate_stale_memory()
         checkpoint = self.current_checkpoint()
@@ -372,6 +381,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return resume_state
 
     def render_checkpoint_text(self):
+        """渲染 checkpoint 的可读文本摘要, 用于注入 prompt。"""
         checkpoint = self.current_checkpoint()
         if not checkpoint:
             return ""
@@ -409,6 +419,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
 
     @staticmethod
     def remember(bucket, item, limit):
+        """向有序桶中插入 item, 保持上限 limit, 自动去重。"""
         if not item:
             return
         if item in bucket:
@@ -422,18 +433,22 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
 
     @property
     def active_tool_profile(self):
+        """返回当前活跃的工具配置文件。"""
         return self.tool_profiles[self._active_tool_profile_name]
 
     def set_tool_profile(self, name):
+        """切换到指定名称的工具配置文件。"""
         if name not in self.tool_profiles:
             raise ValueError(f"unknown tool profile: {name}")
         self._active_tool_profile_name = name
 
     def available_tools(self):
+        """返回当前配置下允许使用的工具字典。"""
         profile = self.active_tool_profile
         return {name: tool for name, tool in self.tools.items() if profile.allows(name)}
 
     def tool_signature(self):
+        """返回可用工具集的 SHA256 签名, 用于检测工具变更。"""
         payload = []
         for name in sorted(self.available_tools()):
             tool = self.available_tools()[name]
@@ -450,6 +465,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         ).hexdigest()
 
     def build_prefix(self):
+        """构建 system prompt prefix: 身份 + 工具清单 + 调用规范 + 工作区快照。"""
         tool_lines = []
         for name, tool in self.available_tools().items():
             fields = ", ".join(
@@ -469,7 +485,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
                 "<final>Done.</final>",
             ]
         )
-        # prefix = agent 的”工作手册”: 身份 + 工具清单 + 调用规范 + 工作区快照,
+        # prefix = agent 的"工作手册": 身份 + 工具清单 + 调用规范 + 工作区快照,
         # 是每轮始终不变的 system prompt 部分。
         text = textwrap.dedent(
             f"""\
@@ -516,6 +532,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         )
 
     def _apply_prefix_state(self, prefix_state):
+        """将 prefix_state 应用为当前 prefix。"""
         self.prefix_state = prefix_state
         self.prefix = prefix_state.text
 
@@ -556,24 +573,30 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return dict(self._last_prefix_refresh)
 
     def memory_text(self):
+        """返回记忆系统的可读文本表示。"""
         return self.memory.render_memory_text()
 
     @property
     def runtime_mode(self):
+        """返回当前运行时模式 (default/plan/readonly)。"""
         return str(
             self.session.get("runtime_mode", {}).get("mode", "default") or "default"
         )
 
     def runtime_mode_text(self):
+        """返回当前运行时模式的提示文本。"""
         return self.plan_mode.prompt_text()
 
     def enter_plan_mode(self, topic, path=None):
+        """进入 plan 模式, 设定主题和路径。"""
         return self.plan_mode.enter(topic, path=path)
 
     def exit_plan_mode(self):
+        """退出 plan 模式。"""
         return self.plan_mode.exit()
 
     def history_text(self):
+        """渲染历史文本, 对最近的条目保留更多细节。"""
         history = self.session["history"]
         if not history:
             return "- empty"
@@ -602,17 +625,21 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return clip("\n".join(lines), MAX_HISTORY)
 
     def feature_enabled(self, name):
+        """检查指定功能开关是否启用。"""
         return bool(self.feature_flags.get(str(name), False))
 
     def prompt(self, user_message):
+        """构建并返回完整 prompt 文本 (不含元数据)。"""
         prompt, _ = self._build_prompt_and_metadata(user_message)
         return prompt
 
     def record(self, item):
+        """将历史条目记录到 session, 并持久化保存。"""
         self.session["history"].append(self.turn_history.enrich(item))
         self.session_path = self.session_store.save(self.session)
 
     def prompt_metadata(self, user_message, prompt):
+        """构建 prompt 并仅返回元数据 (不含文本)。"""
         _, metadata = self._build_prompt_and_metadata(user_message)
         return metadata
 
@@ -634,7 +661,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
             self.compact_history(trigger="auto_prompt_over_budget")
             prompt, metadata = self.context_manager.build(user_message)
             metadata["auto_compacted"] = True
-        # 把”这轮 prompt 是怎么拼出来的”连同缓存相关信息记入元数据.
+        # 把"这轮 prompt 是怎么拼出来的"连同缓存相关信息记入元数据.
         # trace/report 依赖这些字段解释 prefix 为什么变了、缓存是否命中.
         metadata.update(
             {
@@ -676,14 +703,17 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return prompt, metadata
 
     def compact_history(self, trigger="manual", keep_recent_turns=2):
+        """压缩历史记录以控制 prompt 长度。"""
         return self.compact_manager.compact(
             trigger=trigger, keep_recent_turns=keep_recent_turns
         )
 
     def durable_memory_index_text(self):
+        """返回持久记忆索引的可读文本。"""
         return memorylib.load_memory_index_text(self.memory_dir)
 
     def remember_durable_note(self, text):
+        """向持久记忆 (daily log) 追加一条笔记。"""
         path = memorylib.append_to_daily_log(self.memory_dir, text)
         if path:
             self.session_event_bus.emit(
@@ -697,18 +727,22 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return path
 
     def memory_command_text(self):
+        """返回 /memory 命令的显示文本。"""
         index = self.durable_memory_index_text()
         if index:
             return index
         return "No durable memories yet. Use /remember <text> and /dream to consolidate daily logs."
 
     def run_dream(self, quiet=False, session_ids=None):
+        """执行记忆整合 (dream), 将 daily log 提炼为持久记忆。"""
         return memorylib.run_dream(self, quiet=quiet, session_ids=session_ids)
 
     def maintain_memory_after_turn(self, final_answer):
+        """在每轮结束后执行记忆维护。"""
         return memorylib.maintain_memory_after_turn(self, final_answer)
 
     def wait_for_memory_maintenance(self, timeout=None):
+        """等待后台记忆维护线程完成, 可设超时。"""
         thread = self._memory_maintenance_thread
         if thread is None:
             return True
@@ -716,6 +750,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return not thread.is_alive()
 
     def emit_trace(self, task_state, event, payload=None):
+        """发出运行时 trace 事件, 更新 task_state 并通知所有 consumer。"""
         payload = self.redact_artifact(payload or {})
         for path in payload.get("affected_paths", []) or []:
             if path not in task_state.changed_paths:
@@ -731,6 +766,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return payload
 
     def infer_next_step(self, task_state):
+        """根据 task_state 推断下一步操作文本。"""
         if task_state.status == "completed":
             return "No next step recorded."
         if task_state.stop_reason == "step_limit_reached":
@@ -744,7 +780,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
 
         为什么存在：
         并不是每个工具结果都值得长期带进下一轮 prompt。完整结果已经进了
-        `history`，这里只挑少量“下一轮大概率还会用到”的事实做提纯，
+        `history`，这里只挑少量"下一轮大概率还会用到"的事实做提纯，
         例如最近读写过哪些文件、某个文件读出来的短摘要。
 
         输入 / 输出：
@@ -782,9 +818,11 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
             self.memory.invalidate_file_summary(canonical_path)
 
     def note_tool(self, name, args, result):
+        """工具执行后更新记忆, 委托给 update_memory_after_tool。"""
         self.update_memory_after_tool(name, args, result)
 
     def record_process_note_for_tool(self, name, metadata):
+        """将工具执行状态 (部分成功/错误/拒绝) 记录为 process note。"""
         status = str(metadata.get("tool_status", "")).strip()
         if status not in {"partial_success", "error", "rejected"}:
             return
@@ -805,14 +843,17 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         self.session["memory"] = self.memory.to_dict()
 
     def reject_durable_reason(self, note_text):
+        """对持久记忆中的 note 执行脱敏处理。"""
         return memorylib.reject_durable_reason(note_text, redacted_value=REDACTED_VALUE)
 
     def extract_durable_promotions(self, user_message, final_answer):
+        """从用户消息和 final answer 中提取可提升为持久记忆的内容。"""
         return memorylib.extract_durable_promotions(
             user_message, final_answer, redacted_value=REDACTED_VALUE
         )
 
     def promote_durable_memory(self, user_message, final_answer):
+        """将提取的内容提升为持久记忆。"""
         return memorylib.promote_durable_memory(self, user_message, final_answer)
 
     def ask(self, user_message):
@@ -820,6 +861,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return self.engine.ask(user_message)
 
     def abort_current_turn(self):
+        """请求中止当前 turn, 并通知 model_client。"""
         self.abort_requested = True
         abort = getattr(self.model_client, "abort", None)
         if callable(abort):
@@ -829,15 +871,18 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
                 pass
 
     def ask_user(self, question, choices=None):
+        """向用户提问, 返回用户的选择。"""
         if self.ask_user_callback is None:
             return "error: ask_user requires interactive mode"
         choices = [str(choice) for choice in (choices or [])]
         return str(self.ask_user_callback(str(question), choices))
 
     def resume_session(self, session_id):
+        """从指定 session_id 恢复会话。"""
         return resume_runtime_session(self, session_id)
 
     def clear_session(self):
+        """清除当前会话。"""
         return clear_runtime_session(self)
 
     def run_tool(self, name, args):
@@ -845,10 +890,12 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         return tool_executor.run_tool(self, name, args)
 
     def repeated_tool_call(self, name, args):
+        """检测工具调用是否与历史重复。"""
         return is_repeated_tool_call(self.session["history"], name, args)
 
     @staticmethod
     def new_task_id():
+        """生成新的任务 ID。"""
         return (
             "task_"
             + datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -858,6 +905,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
 
     @staticmethod
     def new_run_id():
+        """生成新的运行 ID。"""
         return (
             "run_"
             + datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -866,7 +914,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         )
 
     def build_report(self, task_state):
-        """一次 run 的最终摘要. 写入 .iatcoder/runs/<run_id>/report.json. """
+        """一次 run 的最终摘要, 写入 .iatcoder/runs/<run_id>/report.json。"""
         return {
             "run_id": task_state.run_id,
             "task_id": task_state.task_id,
@@ -894,6 +942,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         }
 
     def tool_example(self, name):
+        """返回指定工具的名称示例。"""
         return toolkit.tool_example(name)
 
     def validate_tool(self, name, args):
@@ -901,9 +950,11 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         toolkit.validate_tool(self, name, args)
 
     def tool_run_shell(self, args):
+        """执行 shell 工具 (委托给 toolkit)。"""
         return toolkit.tool_run_shell(self, args)
 
     def approve(self, name, args):
+        """根据审批策略判断是否批准工具调用。"""
         if self.read_only:
             return False
         if self.approval_policy == "auto":
@@ -918,14 +969,21 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
             return False
         return answer.strip().lower() in {"y", "yes"}
 
+    # 解析模型输出为结构化数据。
     parse = staticmethod(model_output.parse)
+    # 生成重试提示文本。
     retry_notice = staticmethod(model_output.retry_notice)
+    # 从模型输出中解析 XML 格式的工具调用。
     parse_xml_tool = staticmethod(model_output.parse_xml_tool)
+    # 从模型输出中解析 XML 属性。
     parse_attrs = staticmethod(model_output.parse_attrs)
+    # 从模型输出中提取最终答案。
     extract = staticmethod(model_output.extract)
+    # 从模型输出中提取原始文本内容。
     extract_raw = staticmethod(model_output.extract_raw)
 
     def reset(self):
+        """重置会话历史和记忆为初始状态。"""
         self.session["history"] = []
         self.session["memory"].clear()
         self.session["memory"].update(memorylib.default_memory_state())
@@ -936,6 +994,7 @@ class Iatcoder(RuntimeSecretsMixin, RuntimeCheckpointsMixin):
         self.session_store.save(self.session)
 
     def path(self, raw_path):
+        """解析并校验文件路径, 确保不逃逸 workspace 根目录。"""
         path = Path(raw_path)
         path = path if path.is_absolute() else self.root / path
         resolved = path.resolve()

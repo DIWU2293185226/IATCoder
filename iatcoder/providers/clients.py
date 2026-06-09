@@ -19,6 +19,7 @@ RETRYABLE_HTTP_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
 
 
 def _normalize_versioned_base_url(base_url):
+    """确保 base_url 以 /v1 结尾。"""
     base = str(base_url).rstrip("/")
     if not base.endswith("/v1"):
         base += "/v1"
@@ -26,6 +27,7 @@ def _normalize_versioned_base_url(base_url):
 
 
 def _extract_openai_text(data):
+    """从 OpenAI 兼容响应的各种格式中提取文本。"""
     if data.get("output_text"):
         return data["output_text"]
 
@@ -53,6 +55,7 @@ def _extract_openai_text(data):
 
 
 def _extract_openai_text_from_sse(body_text):
+    """从 SSE 流中提取最终文本内容。"""
     last_response = None
     deltas = []
     for line in body_text.splitlines():
@@ -103,6 +106,7 @@ def _extract_openai_text_from_sse(body_text):
 
 
 def _extract_openai_response_from_sse(body_text):
+    """从 SSE 流中提取文本和完整响应数据。"""
     last_response = None
     deltas = []
     for line in body_text.splitlines():
@@ -144,7 +148,7 @@ def _extract_openai_response_from_sse(body_text):
 
 
 def _extract_usage_cache_details(data):
-    # 把不同 OpenAI-compatible 返回里的 usage 字段整理成统一结构，
+    """从响应中提取统一的 usage 和缓存统计。"""
     # 让 runtime/trace/report 不需要关心 provider 细节。
     usage = data.get("usage") or {}
     input_tokens = usage.get("input_tokens", usage.get("prompt_tokens"))
@@ -161,6 +165,7 @@ def _extract_usage_cache_details(data):
 
 
 def _request_with_retries(provider, model, base_url, request, timeout, retry_budget=2):
+    """发起 HTTP 请求，遇到可重试错误时自动重试。"""
     retry_count = 0
     attempts = int(retry_budget) + 1
     for attempt in range(attempts):
@@ -211,6 +216,7 @@ def _request_with_retries(provider, model, base_url, request, timeout, retry_bud
 
 
 def _provider_metadata(provider, model, base_url, attempts, retry_count):
+    """构造 provider 请求元数据字典。"""
     return {
         "provider_protocol": provider,
         "provider_model": model,
@@ -221,6 +227,7 @@ def _provider_metadata(provider, model, base_url, attempts, retry_count):
 
 
 def _http_error_code(status):
+    """将 HTTP 状态码映射为分类错误码。"""
     status = int(status)
     if status == 401 or status == 403:
         return "auth_error"
@@ -234,6 +241,7 @@ def _http_error_code(status):
 
 
 def _transport_error_code(exc):
+    """将传输层异常映射为错误码。"""
     reason = getattr(exc, "reason", None)
     text = f"{exc} {reason}".lower()
     if isinstance(exc, (TimeoutError, socket.timeout)) or isinstance(reason, (TimeoutError, socket.timeout)) or "timed out" in text:
@@ -242,6 +250,7 @@ def _transport_error_code(exc):
 
 
 def _retry_delay(attempt, headers):
+    """计算重试等待时间。"""
     retry_after = _retry_after_seconds(headers)
     if retry_after is not None:
         return min(retry_after, 2.0)
@@ -249,6 +258,7 @@ def _retry_delay(attempt, headers):
 
 
 def _retry_after_seconds(headers):
+    """从响应头中解析 Retry-After 秒数。"""
     if not headers:
         return None
     try:
@@ -264,6 +274,7 @@ def _retry_after_seconds(headers):
 
 
 def _provider_failure(provider, model, base_url, code, message, request_metadata=None, cause=None):
+    """构造一个不可重试的 ProviderError。"""
     request_metadata = request_metadata or {}
     error = ProviderError(
         message,
@@ -281,6 +292,7 @@ def _provider_failure(provider, model, base_url, code, message, request_metadata
 
 class OpenAICompatibleModelClient:
     def __init__(self, model, base_url, api_key, temperature, timeout):
+        """初始化 OpenAI 兼容客户端。"""
         self.model = model
         self.base_url = _normalize_versioned_base_url(base_url)
         self.api_key = api_key
@@ -435,6 +447,7 @@ class OpenAICompatibleModelClient:
 
 
 def _extract_anthropic_text(data):
+    """从 Anthropic 兼容响应中提取文本。"""
     for item in data.get("content", []):
         if isinstance(item, dict) and item.get("type") == "text":
             text = item.get("text")
@@ -445,6 +458,7 @@ def _extract_anthropic_text(data):
 
 class AnthropicCompatibleModelClient:
     def __init__(self, model, base_url, api_key, temperature, timeout):
+        """初始化 Anthropic 兼容客户端。"""
         self.model = model
         self.base_url = _normalize_versioned_base_url(base_url)
         self.api_key = api_key
@@ -454,8 +468,7 @@ class AnthropicCompatibleModelClient:
         self.last_completion_metadata = {}
 
     def complete(self, prompt, max_new_tokens, prompt_cache_key=None, prompt_cache_retention=None):
-        # 为了保持统一接口，runtime 仍然会传缓存参数进来；
-        # 这里只是显式丢弃，因为当前 Anthropic-compatible 路径没有接缓存复用。
+        """向 Anthropic-compatible /messages 接口发起模型调用。"""
         del prompt_cache_key, prompt_cache_retention
         self.last_completion_metadata = {}
         payload = {

@@ -1,4 +1,7 @@
-"""Repeated tool-call guardrails."""
+"""重复工具调用检测。
+
+防止模型在同一轮次反复调用相同工具+相同参数，
+对文件修改类工具有特殊绕行逻辑（读文件后重试可被放行）。"""
 
 FILE_MUTATION_TOOLS = {"write_file", "patch_file"}
 

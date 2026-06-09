@@ -1,4 +1,7 @@
-"""Skill discovery, prompt expansion, and slash workflow execution."""
+"""技能（Skill）系统：发现、加载和渲染。
+
+技能是可以被模型或用户通过 /<name> 调用的预定义工作流。
+支持从内置、项目目录 (~/.iatcoder/skills, .iatcoder/skills) 发现。"""
 
 from __future__ import annotations
 
@@ -35,6 +38,7 @@ class Skill:
     prompt_fn: Callable[[str], str] | None = None
 
     def render(self, arguments=""):
+        """渲染技能提示文本，替换参数占位符。"""
         text = self.prompt_fn(str(arguments)) if self.prompt_fn else self.prompt
         replacements = {
             "$ARGUMENTS": str(arguments),
@@ -48,6 +52,7 @@ class Skill:
         return text.strip()
 
     def metadata(self):
+        """返回技能的元数据字典。"""
         return {
             "name": self.name,
             "description": self.description,
@@ -62,6 +67,7 @@ class Skill:
 
 
 def discover_skills(root, home=None):
+    """发现所有可用的内置和自定义技能。"""
     from .skills_bundled import bundled_skills
 
     skills = {skill.name: skill for skill in bundled_skills()}
@@ -77,6 +83,7 @@ def discover_skills(root, home=None):
 
 
 def load_skills_from_dir(skills_dir, source):
+    """从指定目录加载技能文件。"""
     skills_dir = Path(skills_dir).expanduser()
     if not skills_dir.exists():
         return []
@@ -90,6 +97,7 @@ def load_skills_from_dir(skills_dir, source):
 
 
 def load_skill_file(path, source):
+    """从单个 .md 文件加载技能。"""
     path = Path(path)
     metadata, body = parse_frontmatter(path.read_text(encoding="utf-8"))
     default_name = path.parent.name if path.name == "SKILL.md" else path.stem
@@ -114,6 +122,7 @@ def load_skill_file(path, source):
 
 
 def parse_frontmatter(text):
+    """解析 Markdown 前置元数据。"""
     match = FRONTMATTER_RE.match(str(text))
     if not match:
         return {}, str(text)
@@ -128,6 +137,7 @@ def parse_frontmatter(text):
 
 
 def render_prompt_section(skills):
+    """渲染技能列表供 prompt 使用。"""
     visible = [skill for skill in list_skills(skills, user_invocable_only=False) if _should_show_in_prompt(skill)]
     if not visible:
         return "Available skills:\n- none"
@@ -140,6 +150,7 @@ def render_prompt_section(skills):
 
 
 def render_skills_list(skills):
+    """渲染技能列表供用户查看。"""
     lines = []
     for skill in list_skills(skills):
         description = skill.description or skill.when_to_use or "No description"
@@ -149,6 +160,7 @@ def render_skills_list(skills):
 
 
 def list_skills(skills, user_invocable_only=True):
+    """列出技能，按来源和名称排序。"""
     items = [skills[name] for name in sorted(skills)]
     if user_invocable_only:
         items = [skill for skill in items if skill.user_invocable]
@@ -156,6 +168,7 @@ def list_skills(skills, user_invocable_only=True):
 
 
 def parse_slash_command(text):
+    """解析斜杠命令，返回 (命令名, 参数)。"""
     text = str(text).strip()
     if not text.startswith("/") or text == "/":
         return "", ""
@@ -164,6 +177,7 @@ def parse_slash_command(text):
 
 
 def _parse_value(value):
+    """解析单个 frontmatter 值。"""
     value = value.strip().strip("\"'")
     if value.lower() in {"true", "yes"}:
         return True
@@ -175,12 +189,14 @@ def _parse_value(value):
 
 
 def _list_value(value):
+    """将值转换为列表。"""
     if isinstance(value, (list, tuple)):
         return [str(item).strip() for item in value if str(item).strip()]
     return [item.strip() for item in str(value or "").split(",") if item.strip()]
 
 
 def _string(value, default=""):
+    """将值转换为字符串。"""
     if value is None:
         return default
     if isinstance(value, (list, tuple)):
@@ -189,10 +205,12 @@ def _string(value, default=""):
 
 
 def _bool_value(value):
+    """将值转换为布尔值。"""
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _should_show_in_prompt(skill):
+    """判断技能是否应在 prompt 中展示。"""
     return skill.user_invocable or bool(skill.paths)

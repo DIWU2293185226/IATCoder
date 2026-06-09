@@ -1,3 +1,4 @@
+"""TaskState 状态机测试。"""
 from iatcoder.core.task_state import (
     STOP_REASON_FINAL_ANSWER_RETURNED,
     STOP_REASON_RETRY_LIMIT_REACHED,

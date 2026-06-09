@@ -1,3 +1,4 @@
+"""代码架构边界测试。"""
 from pathlib import Path
 
 

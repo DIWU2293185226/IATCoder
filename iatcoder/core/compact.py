@@ -1,4 +1,7 @@
-"""Session compaction boundary."""
+"""会话历史压缩。
+
+把较早的 turn 合并为一条 compact summary，
+降低 prompt 中的历史长度，控制上下文窗口使用。"""
 
 from .context_usage import estimate_tokens
 from .workspace import now
@@ -6,9 +9,11 @@ from .workspace import now
 
 class CompactManager:
     def __init__(self, agent):
+        """初始化压缩管理器。"""
         self.agent = agent
 
     def compact(self, trigger="manual", keep_recent_turns=2):
+        """压缩较早的 turn，合并为一条 compact summary。"""
         history = list(self.agent.session.get("history", []))
         groups = self._group(history)
         if len(groups) <= keep_recent_turns:
@@ -42,6 +47,7 @@ class CompactManager:
 
     @staticmethod
     def _group(history):
+        """将历史消息按 turn_id 分组。"""
         groups = []
         by_id = {}
         for item in history:
@@ -53,6 +59,7 @@ class CompactManager:
         return groups
 
     def _summary(self, trigger, before, after, summary_text):
+        """生成压缩前后的对比统计。"""
         pre_chars = sum(len(str(item.get("content", ""))) for item in before)
         post_chars = sum(len(str(item.get("content", ""))) for item in after)
         return {
@@ -66,6 +73,7 @@ class CompactManager:
         }
 
     def _summary_text(self, items):
+        """从历史条目中提取摘要文本。"""
         files_read = []
         files_modified = []
         user_requests = []

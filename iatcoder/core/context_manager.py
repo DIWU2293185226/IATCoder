@@ -1,9 +1,10 @@
-# context_manager.py: prompt 组装与上下文预算控制.
-# 每一轮 Engine.run_turn() 调用模型之前, 都由这个模块决定:
-# - 哪些 section (prefix/memory/skills/history/...) 进入 prompt
-# - 每个 section 分配多少 token 预算
-# - 超预算时按优先级依次压缩哪些 section
-# - 当前用户请求永远不裁剪
+"""Prompt 组装与上下文预算控制。
+
+每一轮 Engine.run_turn() 调用模型之前，都由这个模块决定：
+- 哪些 section（prefix/memory/skills/history/...）进入 prompt
+- 每个 section 分配多少 token 预算
+- 超预算时按优先级依次压缩哪些 section
+- 当前用户请求永远不裁剪"""
 
 from __future__ import annotations
 
@@ -44,10 +45,12 @@ class SectionRender:
 
     @property
     def raw_chars(self):
+        """返回原始文本字符数"""
         return len(self.raw)
 
     @property
     def rendered_chars(self):
+        """返回渲染后文本字符数"""
         return len(self.rendered)
 
 
@@ -60,6 +63,7 @@ class ContextManager:
         section_floors=None,
         reduction_order=None,
     ):
+        """初始化 ContextManager，配置总预算、各 section 预算及压缩优先级"""
         self.agent = agent
         self.total_budget = int(total_budget)
         self.section_budgets = dict(DEFAULT_SECTION_BUDGETS)
@@ -183,6 +187,7 @@ class ContextManager:
         return prompt, metadata
 
     def _render_sections_without_reduction(self, section_texts, selected_notes=None):
+        """不启用上下文压缩时直接渲染所有 section"""
         selected_notes = selected_notes or []
         relevant_lines = ["Relevant memory:"]
         if selected_notes:
@@ -218,6 +223,7 @@ class ContextManager:
         }
 
     def _compute_section_floors(self):
+        """计算每个 section 的最低预算下限"""
         floors = {
             section: max(20, int(budget) // 4)
             for section, budget in self.section_budgets.items()
@@ -226,6 +232,7 @@ class ContextManager:
         return floors
 
     def _render_sections(self, section_texts, budgets, selected_notes=None):
+        """按预算渲染所有 prompt section"""
         rendered = {}
         for section in SECTION_ORDER:
             budget = budgets.get(section)
@@ -243,6 +250,7 @@ class ContextManager:
         return rendered
 
     def _render_relevant_memory(self, selected_notes, budget):
+        """渲染相关记忆 section，按预算裁剪每条笔记"""
         header = "Relevant memory:"
         note_texts = [str(note.get("text", "")) for note in selected_notes if str(note.get("text", "")).strip()]
         raw_lines = [header] + [f"- {text}" for text in note_texts]
@@ -290,6 +298,7 @@ class ContextManager:
         )
 
     def _per_note_budget(self, budget, note_count, header):
+        """计算每条相关笔记的预算配额"""
         if note_count <= 0:
             return 0
         overhead = len(header) + 3 * note_count
@@ -297,6 +306,7 @@ class ContextManager:
         return max(1, usable // note_count)
 
     def _render_history_section(self, budget):
+        """渲染历史对话 section，按预算裁剪"""
         history = list(getattr(self.agent, "session", {}).get("history", []))
         raw = self.history_builder.raw_text(history)
         if not history:
@@ -325,11 +335,13 @@ class ContextManager:
         )
 
     def _assemble_prompt(self, rendered):
+        """按固定顺序拼接各 section 为最终 prompt"""
         # 按固定顺序拼接各 section: prefix->memory->skills->relevant->history->current.
         # 稳定规则(prefix/memory)在前, 当前请求在后, 让模型先读到不变的事实.
         return "\n\n".join(rendered[section].rendered for section in SECTION_ORDER).strip()
 
     def _metadata(self, prompt, rendered, budgets, reduction_log, selected_notes, user_message, section_texts):
+        """收集各 section 渲染元数据用于 trace/report"""
         section_metadata = {}
         for section in SECTION_ORDER[:-1]:
             section_metadata[section] = {
@@ -388,6 +400,7 @@ class ContextManager:
         }
 
     def _skills_metadata(self):
+        """收集可用技能的元数据信息"""
         skills = getattr(self.agent, "skills", {})
         items = [skill.metadata() for skill in skillslib.list_skills(skills, user_invocable_only=False)]
         return {

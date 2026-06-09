@@ -1,3 +1,4 @@
+"""Iatcoder 运行时核心测试。"""
 import os
 import io
 import json

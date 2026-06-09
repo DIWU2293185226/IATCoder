@@ -1,3 +1,4 @@
+"""指标汇总测试。"""
 import os
 from unittest.mock import patch
 

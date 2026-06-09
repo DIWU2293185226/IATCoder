@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""TUI 独立启动入口。提供 main() 函数供 `iatcoder tui` 命令调用，
+通过 Textual App.run() 启动交互界面。"""
+
 import sys
 
 from iatcoder.cli import build_agent, build_arg_parser

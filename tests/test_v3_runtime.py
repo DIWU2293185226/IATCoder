@@ -1,3 +1,4 @@
+"""v3 运行时兼容性测试。"""
 import json
 
 from iatcoder.testing import ScriptedModelClient

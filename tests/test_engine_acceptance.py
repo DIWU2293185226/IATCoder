@@ -1,3 +1,4 @@
+"""Engine 控制循环的验收测试。"""
 import json
 
 from iatcoder.testing import ScriptedModelClient

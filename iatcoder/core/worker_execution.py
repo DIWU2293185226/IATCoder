@@ -1,4 +1,7 @@
-"""Worker thread execution routine."""
+"""Worker 线程执行逻辑。
+
+在后台线程中运行子 agent 的 ask()，
+收集执行结果并通知主 agent。"""
 
 import time
 

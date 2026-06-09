@@ -1,3 +1,4 @@
+"""RunStore 持久化测试。"""
 import json
 
 from iatcoder.core.run_store import RunStore

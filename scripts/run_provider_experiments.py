@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""运行 provider 对比实验：用不同 provider 执行 benchmark 并对比结果。"""
 import argparse
 import json
 import sys

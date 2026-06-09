@@ -1,4 +1,6 @@
-"""Execution helpers for Iatcoder skills."""
+"""技能执行辅助函数。
+
+负责调用技能、管理技能的工具集和作用域（fork/inline）。"""
 
 from __future__ import annotations
 

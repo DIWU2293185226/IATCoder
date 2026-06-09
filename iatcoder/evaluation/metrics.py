@@ -1,3 +1,6 @@
+"""指标汇总和报告生成。
+
+聚合多个 benchmark 运行结果，生成核心指标报告。"""
 import json
 import tempfile
 from contextlib import contextmanager
@@ -20,6 +23,7 @@ DEFAULT_CORE_REPORT_PATH = Path("docs/metrics/iatcoder-benchmark-core-report.md"
 
 
 def _safe_mean(values):
+    """安全计算平均值，空列表返回 0。"""
     values = list(values)
     if not values:
         return 0.0
@@ -27,12 +31,14 @@ def _safe_mean(values):
 
 
 def _safe_ratio(numerator, denominator):
+    """安全计算比率，分母为零时返回 0。"""
     if not denominator:
         return 0.0
     return numerator / denominator
 
 
 def _parse_iso8601(value):
+    """解析 ISO8601 时间字符串为 datetime 对象。"""
     if not value:
         return None
     try:
@@ -42,6 +48,7 @@ def _parse_iso8601(value):
 
 
 def aggregate_benchmark_artifact(path):
+    """聚合单个 benchmark artifact 文件的摘要统计。"""
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     rows = list(payload.get("rows", []))
     summary = dict(payload.get("summary", {}))
@@ -70,6 +77,7 @@ def aggregate_benchmark_artifact(path):
 
 
 def _infer_run_duration_ms(events):
+    """从事件列表中推断运行耗时（毫秒）。"""
     finished = next((event for event in reversed(events) if event.get("event") == "run_finished"), None)
     if finished and finished.get("run_duration_ms") is not None:
         return float(finished["run_duration_ms"])
@@ -84,6 +92,7 @@ def _infer_run_duration_ms(events):
 
 
 def aggregate_run_artifacts(runs_root):
+    """聚合 runs 目录下所有运行的 trace 和 report 统计数据。"""
     runs_root = Path(runs_root)
     run_dirs = sorted(path for path in runs_root.glob("*") if path.is_dir())
     reports = []
@@ -158,6 +167,7 @@ def aggregate_run_artifacts(runs_root):
 
 @contextmanager
 def _temporary_feature_flags(agent, updates):
+    """临时覆盖 agent 的 feature flags，退出时恢复。"""
     previous = dict(getattr(agent, "feature_flags", {}))
     merged = dict(previous)
     merged.update(updates)
@@ -169,6 +179,7 @@ def _temporary_feature_flags(agent, updates):
 
 
 def measure_feature_ablation_metrics(agent, user_message):
+    """测量不同 feature flag 组合下的 prompt 大小和压缩效果。"""
     variants = {
         "full": {},
         "no_context_reduction": {"context_reduction": False},
@@ -190,6 +201,7 @@ def measure_feature_ablation_metrics(agent, user_message):
 
 
 def build_stress_agent_metrics():
+    """构建带大量历史/笔记的 agent 并测量 ablation 指标。"""
     with tempfile.TemporaryDirectory(prefix="iatcoder-metrics-") as temp_dir:
         workspace_root = Path(temp_dir)
         (workspace_root / "README.md").write_text("demo\n", encoding="utf-8")
@@ -219,6 +231,7 @@ def build_stress_agent_metrics():
 
 class _MemoryExperimentModelClient(ScriptedModelClient):
     def __init__(self, expected_fact, filename):
+        """初始化内存实验模型客户端，验证模型是否能记住 fact。"""
         super().__init__([])
         self.expected_fact = str(expected_fact).strip().lower()
         self.filename = str(filename).strip()
@@ -226,6 +239,7 @@ class _MemoryExperimentModelClient(ScriptedModelClient):
         self.followup_reads = 0
 
     def complete(self, prompt, max_new_tokens, **kwargs):
+        """按阶段返回预设输出，模拟模型的行为。"""
         del max_new_tokens, kwargs
         self.prompts.append(prompt)
         self.last_completion_metadata = {}
@@ -255,6 +269,7 @@ class _MemoryExperimentModelClient(ScriptedModelClient):
 
 
 def _build_memory_experiment_agent(workspace_root, expected_fact, filename):
+    """构建用于内存实验的 agent。"""
     workspace = WorkspaceContext.build(workspace_root)
     store = SessionStore(workspace_root / ".iatcoder" / "sessions")
     return Iatcoder(
@@ -266,6 +281,7 @@ def _build_memory_experiment_agent(workspace_root, expected_fact, filename):
 
 
 def _set_irrelevant_memory(agent):
+    """向 agent 注入不相关的记忆内容，用于对照实验。"""
     state = agent.memory.to_dict()
     state["episodic_notes"] = [
         {
@@ -283,6 +299,7 @@ def _set_irrelevant_memory(agent):
 
 
 def _run_memory_variant(mode):
+    """运行单个内存实验 variant 并返回结果。"""
     with tempfile.TemporaryDirectory(prefix="iatcoder-memory-experiment-") as temp_dir:
         workspace_root = Path(temp_dir)
         (workspace_root / "README.md").write_text("demo\n", encoding="utf-8")
@@ -308,6 +325,7 @@ def _run_memory_variant(mode):
 
 
 def run_memory_dependency_experiment(repetitions=3):
+    """运行小规模内存依赖实验，多次重复取均值。"""
     variants = {
         "memory_on": [],
         "memory_off": [],
@@ -345,16 +363,19 @@ MEMORY_EXPERIMENT_TASKS = [
 
 
 def _write_memory_task_files(workspace_root, task):
+    """向 workspace 写入内存实验任务的文件。"""
     filename = task["filename"]
     payload = task["fact"]
     (workspace_root / filename).write_text(payload + "\n", encoding="utf-8")
 
 
 def _bootstrap_prompt(task):
+    """为内存实验任务构造引导阶段的 prompt。"""
     return f"Read {task['filename']} and remember the key fact."
 
 
 def _followup_prompt(task):
+    """为内存实验任务构造后续追问的 prompt。"""
     if task["category"] == "fact_lookup":
         return f"What does {task['filename']} say?"
     if task["category"] == "edit_dependency":
@@ -363,6 +384,7 @@ def _followup_prompt(task):
 
 
 def _set_irrelevant_memory_for_task(agent):
+    """为大规模实验注入不相关的记忆内容。"""
     state = agent.memory.to_dict()
     state["episodic_notes"] = [
         {
@@ -380,6 +402,7 @@ def _set_irrelevant_memory_for_task(agent):
 
 
 def _run_memory_task_variant(task, variant):
+    """运行单个大规模内存实验任务 variant。"""
     with tempfile.TemporaryDirectory(prefix="iatcoder-memory-large-") as temp_dir:
         workspace_root = Path(temp_dir)
         (workspace_root / "README.md").write_text("demo\n", encoding="utf-8")
@@ -402,6 +425,7 @@ def _run_memory_task_variant(task, variant):
 
 
 def run_large_scale_memory_experiment(repetitions=5):
+    """运行大规模内存实验，覆盖多种 fact 类型。"""
     repetitions = int(repetitions)
     variants = {
         "memory_on": [],
@@ -437,6 +461,7 @@ def run_large_scale_memory_experiment(repetitions=5):
 
 
 def run_context_stress_matrix(repetitions=5):
+    """运行上下文压力矩阵实验，测试不同历史/笔记/请求长度组合。"""
     repetitions = int(repetitions)
     history_levels = [("short", 4), ("medium", 12), ("long", 24)]
     note_levels = [("low", 2), ("high", 10)]
@@ -521,6 +546,7 @@ def run_context_stress_matrix(repetitions=5):
 
 
 def _security_agent(workspace_root, approval_policy="auto", read_only=False):
+    """构建用于安全实验的 agent。"""
     workspace = WorkspaceContext.build(workspace_root)
     store = SessionStore(workspace_root / ".iatcoder" / "sessions")
     return Iatcoder(
@@ -533,6 +559,7 @@ def _security_agent(workspace_root, approval_policy="auto", read_only=False):
 
 
 def _scenario_invalid_patch_nonunique(workspace_root):
+    """场景：patch_file 匹配到多个位置。"""
     (workspace_root / "sample.txt").write_text("beta\nbeta\n", encoding="utf-8")
     agent = _security_agent(workspace_root)
     agent.run_tool("patch_file", {"path": "sample.txt", "old_text": "beta", "new_text": "locked"})
@@ -540,6 +567,7 @@ def _scenario_invalid_patch_nonunique(workspace_root):
 
 
 def _scenario_invalid_patch_missing_field(workspace_root):
+    """场景：patch_file 缺少 new_text 字段。"""
     (workspace_root / "sample.txt").write_text("beta\n", encoding="utf-8")
     agent = _security_agent(workspace_root)
     agent.run_tool("patch_file", {"path": "sample.txt", "old_text": "beta"})
@@ -547,24 +575,28 @@ def _scenario_invalid_patch_missing_field(workspace_root):
 
 
 def _scenario_timeout_out_of_range(workspace_root):
+    """场景：shell timeout 超出范围。"""
     agent = _security_agent(workspace_root)
     agent.run_tool("run_shell", {"command": "echo hi", "timeout": 121})
     return dict(agent._last_tool_result_metadata)
 
 
 def _scenario_empty_command(workspace_root):
+    """场景：shell 命令为空。"""
     agent = _security_agent(workspace_root)
     agent.run_tool("run_shell", {"command": "", "timeout": 20})
     return dict(agent._last_tool_result_metadata)
 
 
 def _scenario_empty_agent_prompt(workspace_root):
+    """场景：agent 工具 prompt 为空。"""
     agent = _security_agent(workspace_root)
     agent.run_tool("agent", {"description": "Inspect", "prompt": "", "subagent_type": "Explore"})
     return dict(agent._last_tool_result_metadata)
 
 
 def _scenario_path_escape_read(workspace_root):
+    """场景：尝试读取 workspace 外的文件。"""
     outside = workspace_root.parent / f"{workspace_root.name}-outside.txt"
     outside.write_text("outside\n", encoding="utf-8")
     agent = _security_agent(workspace_root)
@@ -573,6 +605,7 @@ def _scenario_path_escape_read(workspace_root):
 
 
 def _scenario_symlink_escape(workspace_root):
+    """场景：通过符号链接逃逸到 workspace 外。"""
     outside = workspace_root.parent / f"{workspace_root.name}-symlink-target.txt"
     outside.write_text("outside\n", encoding="utf-8")
     (workspace_root / "linked.txt").symlink_to(outside)
@@ -582,24 +615,28 @@ def _scenario_symlink_escape(workspace_root):
 
 
 def _scenario_search_escape(workspace_root):
+    """场景：search 工具 path 参数逃逸到 workspace 外。"""
     agent = _security_agent(workspace_root)
     agent.run_tool("search", {"pattern": "abc", "path": "../outside"})
     return dict(agent._last_tool_result_metadata)
 
 
 def _scenario_approval_denied(workspace_root):
+    """场景：approval 策略为 never 时工具被拒绝。"""
     agent = _security_agent(workspace_root, approval_policy="never")
     agent.run_tool("run_shell", {"command": "echo hi", "timeout": 20})
     return dict(agent._last_tool_result_metadata)
 
 
 def _scenario_read_only_block(workspace_root):
+    """场景：read_only 模式下写文件被拒绝。"""
     agent = _security_agent(workspace_root, read_only=True)
     agent.run_tool("write_file", {"path": "x.txt", "content": "nope"})
     return dict(agent._last_tool_result_metadata)
 
 
 def _scenario_repeated_call(workspace_root):
+    """场景：重复调用相同参数的读文件工具。"""
     (workspace_root / "README.md").write_text("demo\n", encoding="utf-8")
     agent = _security_agent(workspace_root)
     args = {"path": "README.md", "start": 1, "end": 1}
@@ -625,6 +662,7 @@ SECURITY_SCENARIOS = [
 
 
 def run_security_experiment_suite(repetitions=3):
+    """运行安全实验套件，覆盖多种攻击场景。"""
     repetitions = int(repetitions)
     rows = []
     security_event_counts = {}
@@ -653,6 +691,7 @@ def run_security_experiment_suite(repetitions=3):
 
 
 def _provider_summary_from_artifact(payload):
+    """从 artifact 载荷提取 provider 实验摘要。"""
     rows = list(payload.get("rows", []))
     cached_tokens = []
     cache_hits = []
@@ -679,6 +718,7 @@ def _provider_summary_from_artifact(payload):
 
 
 def _provider_profile(provider):
+    """获取 provider 配置信息，包括 API key 状态。"""
     config = resolve_provider_config(provider, start=Path.cwd())
     if not config.api_key:
         return {
@@ -699,6 +739,7 @@ def _provider_profile(provider):
 
 
 def _make_provider_client(provider):
+    """根据 provider 协议创建对应的模型客户端。"""
     profile = _provider_profile(provider)
     if profile["status"] != "ready":
         raise RuntimeError(profile["reason"])
@@ -721,6 +762,7 @@ def _make_provider_client(provider):
 
 
 def _normalize_text(value):
+    """规范化文本：去首尾空白、小写、去尾标点。"""
     text = str(value).strip().lower()
     while text.endswith((".", "!", "?", "\"", "'")):
         text = text[:-1].strip()
@@ -728,6 +770,7 @@ def _normalize_text(value):
 
 
 def run_provider_experiments(benchmark_path, workspace_root, artifact_root, max_new_tokens=64):
+    """在多个 provider 上运行 benchmark 对比实验。"""
     benchmark_path = Path(benchmark_path)
     workspace_root = Path(workspace_root)
     artifact_root = Path(artifact_root)
@@ -786,6 +829,7 @@ def run_provider_experiments(benchmark_path, workspace_root, artifact_root, max_
 
 
 def _followup_trace_metrics(agent):
+    """从 agent trace 中统计 read_file 的重复调用次数。"""
     trace_path = agent.run_store.trace_path(agent.current_task_state)
     events = [json.loads(line) for line in trace_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     repeated_reads = sum(1 for event in events if event.get("event") == "tool_executed" and event.get("name") == "read_file")
@@ -793,6 +837,7 @@ def _followup_trace_metrics(agent):
 
 
 def _inject_memory_noise(agent, rounds=8):
+    """向 agent 历史中注入无意义的对话噪声。"""
     for index in range(int(rounds)):
         agent.record(
             {
@@ -804,6 +849,7 @@ def _inject_memory_noise(agent, rounds=8):
 
 
 def _truncate_read_history(agent):
+    """截断历史中的 read_file 内容，只保留路径信息。"""
     updated = []
     for item in agent.session["history"]:
         if item.get("role") == "tool" and item.get("name") == "read_file":
@@ -817,6 +863,7 @@ def _truncate_read_history(agent):
 
 
 def _build_real_agent(workspace_root, provider, approval_policy="auto", read_only=False):
+    """构建连接真实模型的 agent。"""
     workspace = WorkspaceContext.build(workspace_root)
     store = SessionStore(workspace_root / ".iatcoder" / "sessions")
     return Iatcoder(
@@ -829,6 +876,7 @@ def _build_real_agent(workspace_root, provider, approval_policy="auto", read_onl
 
 
 def run_real_memory_experiment(provider="gpt", repetitions=1):
+    """使用真实模型运行内存实验。"""
     repetitions = int(repetitions)
     provider = str(provider)
     variants = {"memory_on": [], "memory_off": [], "memory_irrelevant": []}
@@ -895,6 +943,7 @@ def run_real_memory_experiment(provider="gpt", repetitions=1):
 
 
 def run_real_context_experiment(provider="gpt", repetitions=1):
+    """使用真实模型运行上下文压缩实验。"""
     repetitions = int(repetitions)
     provider = str(provider)
     history_levels = [("short", 4), ("medium", 12), ("long", 24)]
@@ -984,6 +1033,7 @@ REAL_SECURITY_SCENARIOS = [
 
 
 def _setup_real_security_workspace(workspace_root, scenario_id):
+    """根据场景 ID 设置真实安全实验的 workspace。"""
     (workspace_root / "README.md").write_text("demo\n", encoding="utf-8")
     if scenario_id == "path_escape_read":
         outside = workspace_root.parent / "outside.txt"
@@ -998,6 +1048,7 @@ def _setup_real_security_workspace(workspace_root, scenario_id):
 
 
 def _security_result_row(scenario_id, provider, metadata):
+    """构建安全实验结果行，补全默认字段。"""
     row = dict(metadata)
     row["scenario_id"] = scenario_id
     row["provider"] = provider
@@ -1008,6 +1059,7 @@ def _security_result_row(scenario_id, provider, metadata):
 
 
 def _run_real_repeated_call_scenario(provider):
+    """运行真实模型的重复调用安全场景。"""
     with tempfile.TemporaryDirectory(prefix="iatcoder-real-security-repeat-") as temp_dir:
         workspace_root = Path(temp_dir)
         (workspace_root / "README.md").write_text("demo\n", encoding="utf-8")
@@ -1019,6 +1071,7 @@ def _run_real_repeated_call_scenario(provider):
 
 
 def run_real_security_experiment_suite(provider="gpt", repetitions=1):
+    """使用真实模型运行安全实验套件。"""
     repetitions = int(repetitions)
     provider = str(provider)
     rows = []
@@ -1069,6 +1122,7 @@ def collect_resume_metrics(
     experiment_mode="synthetic",
     real_provider="gpt",
 ):
+    """收集所有 metrics 数据并汇总为一份报告字典。"""
     benchmark = aggregate_benchmark_artifact(benchmark_artifact_path)
     runs = aggregate_run_artifacts(runs_root)
     experiment_mode = str(experiment_mode)
@@ -1124,6 +1178,7 @@ def collect_resume_metrics(
 
 
 def render_resume_metrics_markdown(metrics):
+    """将 resume metrics 字典渲染为 Markdown 报告文本。"""
     benchmark = metrics["benchmark"]
     runs = metrics["runs"]
     stress = metrics["stress_ablation"]
@@ -1173,6 +1228,7 @@ def render_resume_metrics_markdown(metrics):
 
 
 def render_large_scale_experiment_report(metrics):
+    """将大规模实验指标渲染为详细实验报告 Markdown 文本。"""
     benchmark = metrics["benchmark"]
     memory_small = metrics["memory_experiment"]
     memory_large = metrics["memory_large_experiment"]
@@ -1244,6 +1300,7 @@ def render_large_scale_experiment_report(metrics):
 
 
 def _write_json_artifact(path, payload):
+    """将 JSON 工件写入磁盘文件。"""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1252,11 +1309,13 @@ def _write_json_artifact(path, payload):
 
 class _RecoveryScenarioModelClient(ScriptedModelClient):
     def __init__(self, required_fragments, success_answer):
+        """初始化恢复实验模型客户端，验证 prompt 中是否包含所需片段。"""
         super().__init__([])
         self.required_fragments = [str(fragment).lower() for fragment in required_fragments]
         self.success_answer = str(success_answer)
 
     def complete(self, prompt, max_new_tokens, **kwargs):
+        """检查 prompt 是否包含所有必要片段，否则返回失败信号。"""
         del max_new_tokens, kwargs
         self.prompts.append(prompt)
         self.last_completion_metadata = {}
@@ -1331,6 +1390,7 @@ RECOVERY_ABLATION_TASKS = [
 
 
 def _build_recovery_agent(workspace_root, required_fragments):
+    """构建用于恢复实验的 agent。"""
     workspace = WorkspaceContext.build(workspace_root)
     store = SessionStore(workspace_root / ".iatcoder" / "sessions")
     return Iatcoder(
@@ -1343,6 +1403,7 @@ def _build_recovery_agent(workspace_root, required_fragments):
 
 
 def _apply_recovery_setup(agent, task, workspace_root):
+    """根据任务 setup 对 agent 施加恢复实验所需的 checkpoint 状态。"""
     setup = task["setup"]
     workspace_root = Path(workspace_root)
     (workspace_root / "sample.txt").write_text("alpha\nbeta\ngamma\nplaceholder\n", encoding="utf-8")
@@ -1496,6 +1557,7 @@ def _apply_recovery_setup(agent, task, workspace_root):
 
 
 def _run_recovery_task_variant(task, variant):
+    """运行单个恢复实验任务 variant。"""
     with tempfile.TemporaryDirectory(prefix="iatcoder-recovery-ablation-") as temp_dir:
         workspace_root = Path(temp_dir)
         (workspace_root / "README.md").write_text("demo\n", encoding="utf-8")
@@ -1531,6 +1593,7 @@ def _run_recovery_task_variant(task, variant):
 
 
 def _recovery_variant_summary(rows):
+    """计算恢复实验 variant 的汇总统计。"""
     rows = list(rows)
     stale_rows = [row for row in rows if row["category"] == "partial_stale"]
     drift_rows = [row for row in rows if row["category"] == "workspace_mismatch"]
@@ -1544,6 +1607,7 @@ def _recovery_variant_summary(rows):
 
 
 def run_context_ablation_v2(artifact_path=DEFAULT_CONTEXT_ABLATION_V2_PATH, repetitions=5):
+    """运行上下文消融实验 v2 并写入 artifact。"""
     payload = run_context_stress_matrix(repetitions=repetitions)
     artifact = {
         "schema_version": METRICS_SCHEMA_VERSION,
@@ -1557,6 +1621,7 @@ def run_context_ablation_v2(artifact_path=DEFAULT_CONTEXT_ABLATION_V2_PATH, repe
 
 
 def run_memory_ablation_v2(artifact_path=DEFAULT_MEMORY_ABLATION_V2_PATH, repetitions=5):
+    """运行记忆消融实验 v2 并写入 artifact。"""
     payload = run_large_scale_memory_experiment(repetitions=repetitions)
     artifact = {
         "schema_version": METRICS_SCHEMA_VERSION,
@@ -1572,6 +1637,7 @@ def run_memory_ablation_v2(artifact_path=DEFAULT_MEMORY_ABLATION_V2_PATH, repeti
 
 
 def run_recovery_ablation_v2(artifact_path=DEFAULT_RECOVERY_ABLATION_V2_PATH, repetitions=3):
+    """运行恢复消融实验 v2 并写入 artifact。"""
     repetitions = int(repetitions)
     variants = {"resume_enabled": [], "resume_disabled": []}
     for task in RECOVERY_ABLATION_TASKS:
@@ -1601,6 +1667,7 @@ def write_benchmark_core_report(
     memory_artifact_path=DEFAULT_MEMORY_ABLATION_V2_PATH,
     recovery_artifact_path=DEFAULT_RECOVERY_ABLATION_V2_PATH,
 ):
+    """从已有 artifact 文件生成核心 benchmark 报告。"""
     harness = json.loads(Path(harness_artifact_path).read_text(encoding="utf-8"))
     context = json.loads(Path(context_artifact_path).read_text(encoding="utf-8"))
     memory = json.loads(Path(memory_artifact_path).read_text(encoding="utf-8"))

@@ -1,3 +1,4 @@
+"""Todo 任务看板验收测试。"""
 import json
 
 from iatcoder.testing import ScriptedModelClient

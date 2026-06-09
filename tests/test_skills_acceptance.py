@@ -1,3 +1,4 @@
+"""技能系统验收测试。"""
 import json
 import os
 import subprocess

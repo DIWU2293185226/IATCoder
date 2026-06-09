@@ -1,3 +1,4 @@
+"""业务场景 dogfood 测试：在真实场景上验证 agent 行为。"""
 import importlib.util
 import inspect
 import json

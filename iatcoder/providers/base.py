@@ -1,4 +1,4 @@
-"""Provider-facing result types."""
+"""Provider 结果类型和统一调用函数。"""
 
 from dataclasses import dataclass, field
 

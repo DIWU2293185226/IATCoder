@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""Textual TUI 应用主入口。IatcoderTuiApp 是 iatcoder 的终端交互界面，基于 Textual 框架实现，
+提供消息聊天、工具执行卡片、审批弹窗、斜杠命令补全等交互功能。"""
+
 import asyncio
 import threading
 from functools import partial
@@ -46,6 +49,7 @@ class IatcoderTuiApp(App):
     ]
 
     def __init__(self, agent, **kwargs) -> None:
+        """初始化 TUI 应用，绑定 agent 并替换审批/询问回调。"""
         super().__init__(**kwargs)
         self.agent = agent
         self._turn_count = 0
@@ -60,6 +64,7 @@ class IatcoderTuiApp(App):
         self.agent.ask_user_callback = self._ask_user_callback
 
     def compose(self) -> ComposeResult:
+        """构建 UI 组件树：欢迎横幅、聊天日志、思考指示器、状态栏、输入栏。"""
         yield WelcomeBanner(
             model_name=str(getattr(self.agent.model_client, "model", "")),
             cwd=str(getattr(self.agent, "root", "")),
@@ -71,19 +76,23 @@ class IatcoderTuiApp(App):
         yield InputBar()
 
     def on_mount(self) -> None:
+        # 挂载时初始化状态栏、聚焦输入框、启动工作通知轮询。
         self.query_one(StatusBar).update_agent(self.agent)
         self.query_one(InputBar).focus_input()
         self.set_interval(0.5, self._drain_idle_worker_notifications)
 
     def on_unmount(self) -> None:
+        # 卸载时恢复 agent 的原始回调函数。
         if self._previous_approve is not None:
             self.agent.approve = self._previous_approve
         self.agent.ask_user_callback = self._previous_ask_user
 
     def action_clear_screen(self) -> None:
+        """清除聊天日志中的所有消息。"""
         self.query_one(ChatLog).clear_messages()
 
     def action_submit_input(self) -> None:
+        """提交用户输入：处理斜杠命令或启动 agent 对话。"""
         if self._ask_user_prompt is not None:
             self._resolve_ask_user(self._ask_user_prompt.selected_choice)
             return
@@ -106,6 +115,7 @@ class IatcoderTuiApp(App):
         self._run_agent(text)
 
     def on_key(self, event: Key) -> None:
+        # 处理按键：确认/询问导航、斜杠补全、输入历史。
         if self._ask_user_prompt is not None:
             if event.key in {"right", "down"}:
                 self._ask_user_prompt.select_next()
@@ -152,6 +162,7 @@ class IatcoderTuiApp(App):
             event.prevent_default()
 
     def _handle_command(self, text: str) -> None:
+        """处理斜杠命令，若需退出则关闭应用。"""
         handled, should_exit, output = handle_repl_command(self.agent, text)
         if should_exit:
             self.exit()
@@ -165,6 +176,7 @@ class IatcoderTuiApp(App):
         )
 
     def _run_agent(self, text: str) -> None:
+        """启动 agent 异步任务，显示思考指示器动画。"""
         self.query_one(InputBar).set_busy(True)
         self.query_one(ThinkingIndicator).show()
         self._thinking_timer = self.set_interval(
@@ -173,6 +185,7 @@ class IatcoderTuiApp(App):
         asyncio.create_task(self._agent_task(text))
 
     def _drain_idle_worker_notifications(self) -> None:
+        """定时排空 worker 通知并显示到聊天日志中。"""
         if self.query_one(InputBar).input.disabled:
             return
         notifications = self.agent.engine.drain_worker_notifications()
@@ -184,6 +197,7 @@ class IatcoderTuiApp(App):
         self.query_one(StatusBar).update_agent(self.agent)
 
     async def _agent_task(self, text: str) -> None:
+        """在后台线程中驱动 agent 对话轮次并更新 UI。"""
         loop = asyncio.get_running_loop()
         try:
             await loop.run_in_executor(None, partial(self._drive_turn, text))
@@ -203,6 +217,7 @@ class IatcoderTuiApp(App):
             status.update_context_usage(usage)
 
     def _drive_turn(self, text: str) -> None:
+        """在 executor 中运行 engine.run_turn 事件循环。"""
         for event in self.agent.engine.run_turn(text):
             try:
                 self.call_from_thread(self._handle_runtime_event, dict(event))
@@ -210,6 +225,7 @@ class IatcoderTuiApp(App):
                 return
 
     def _handle_runtime_event(self, event: dict) -> None:
+        # 处理运行时事件：模型请求、工具调用、工具结果、通知等。
         event_type = str(event.get("type", ""))
         if event_type == "model_requested":
             attempts = event.get("attempts", 0)
@@ -245,6 +261,7 @@ class IatcoderTuiApp(App):
             return
 
     def _finish_tool_card(self, event: dict) -> None:
+        """更新工具执行卡片的状态为成功或错误。"""
         name = str(event.get("name", ""))
         card = None
         for candidate in reversed(self._running_tool_cards):
@@ -264,6 +281,7 @@ class IatcoderTuiApp(App):
             card.set_success(content)
 
     def _stop_thinking(self) -> None:
+        """停止思考指示器动画并隐藏。"""
         timer = getattr(self, "_thinking_timer", None)
         if timer is not None:
             timer.stop()
@@ -271,6 +289,7 @@ class IatcoderTuiApp(App):
         self.query_one(ThinkingIndicator).hide()
 
     def _approval_callback(self, name: str, args: dict) -> bool:
+        """审批回调：显示确认弹窗并阻塞等待用户决策。"""
         event = threading.Event()
         decision = {"approved": False}
         try:
@@ -283,6 +302,7 @@ class IatcoderTuiApp(App):
     def _show_confirm(
         self, name: str, args: dict, event: threading.Event, decision: dict
     ) -> None:
+        """显示工具调用确认弹窗让用户审批。"""
         prompt = ConfirmPrompt(name, format_tool_args(name, args))
         self._confirm_prompt = prompt
         self._confirm_decision = (event, decision)
@@ -291,6 +311,7 @@ class IatcoderTuiApp(App):
         chat.call_after_refresh(chat.scroll_end, animate=False)
 
     def _resolve_confirm(self, approved: bool) -> None:
+        """处理用户对确认弹窗的响应，解除阻塞。"""
         if self._confirm_decision is None:
             return
         event, decision = self._confirm_decision
@@ -302,6 +323,7 @@ class IatcoderTuiApp(App):
         self._confirm_decision = None
 
     def _ask_user_callback(self, question: str, choices: list[str]) -> str:
+        """询问用户回调：显示选择弹窗并阻塞等待用户回答。"""
         event = threading.Event()
         decision = {"answer": ""}
         try:
@@ -316,6 +338,7 @@ class IatcoderTuiApp(App):
     def _show_ask_user(
         self, question: str, choices: list[str], event: threading.Event, decision: dict
     ) -> None:
+        """显示询问用户的选择弹窗。"""
         prompt = AskUserPrompt(question, choices)
         self._ask_user_prompt = prompt
         self._ask_user_decision = (event, decision)
@@ -324,6 +347,7 @@ class IatcoderTuiApp(App):
         chat.call_after_refresh(chat.scroll_end, animate=False)
 
     def _resolve_ask_user(self, answer: str) -> None:
+        """处理用户对询问弹窗的响应，解除阻塞。"""
         if self._ask_user_decision is None:
             return
         event, decision = self._ask_user_decision

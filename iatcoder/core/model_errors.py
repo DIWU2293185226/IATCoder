@@ -1,4 +1,4 @@
-"""Model error finishing path for turn execution."""
+"""模型错误处理：turn 因模型错误而终止时的清理路径。"""
 
 from ..providers.errors import ProviderError
 from .workspace import clip, now

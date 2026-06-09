@@ -1,4 +1,7 @@
-"""Runtime mode tool definitions."""
+"""plan mode 工具定义。
+
+enter_plan_mode / exit_plan_mode 让模型可以主动进入和退出规划模式，
+在规划模式下写操作受限，只能修改 plan 工件。"""
 
 PLAN_TOOL_SPECS = {
     "enter_plan_mode": {

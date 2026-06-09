@@ -1,4 +1,7 @@
-"""Runtime permission decisions for tool execution."""
+"""工具执行权限检查。
+
+根据 approval 策略、plan mode、write_scope 和 read_only
+决定工具调用是否被允许。"""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,22 +15,27 @@ class PermissionDecision:
 
     @classmethod
     def allow(cls, reason):
+        """创建允许通过的决定。"""
         return cls("allow", reason)
 
     @classmethod
     def deny(cls, reason, security_event_type=""):
+        """创建拒绝访问的决定。"""
         return cls("deny", reason, security_event_type)
 
     @property
     def allowed(self):
+        """判断该决定是否允许执行。"""
         return self.decision == "allow"
 
 
 class PermissionChecker:
     def __init__(self, runtime):
+        """初始化权限检查器，绑定 runtime。"""
         self.runtime = runtime
 
     def check(self, tool, args):
+        """根据当前策略检查工具调用是否被允许。"""
         args = args or {}
         profile = self.runtime.active_tool_profile
         if not profile.allows(tool.name):
@@ -53,6 +61,7 @@ class PermissionChecker:
         return PermissionDecision.deny("approval_denied", "approval_denied")
 
     def _check_plan(self, tool, args):
+        """plan 模式下只允许写入 plan 工件。"""
         if tool.read_only:
             return PermissionDecision.allow("plan_read_only")
         if tool.name not in {"write_file", "patch_file"}:
@@ -64,6 +73,7 @@ class PermissionChecker:
         return PermissionDecision.allow("plan_artifact_write")
 
     def _check_write_scope(self, tool, args):
+        """检查写入路径是否在允许的 scope 内。"""
         requested = self.runtime.path(args.get("path", ""))
         for raw_scope in self.runtime.write_scope:
             scope = self.runtime.path(raw_scope)

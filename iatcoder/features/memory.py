@@ -71,6 +71,7 @@ DURABLE_TOPIC_DEFAULTS = {
 
 
 def ensure_memory_dir(memory_dir):
+    """确保记忆目录结构存在，若不存在则自动创建。"""
     memory_dir = Path(memory_dir)
     memory_dir.mkdir(parents=True, exist_ok=True)
     (memory_dir / "logs").mkdir(parents=True, exist_ok=True)
@@ -87,6 +88,7 @@ def ensure_memory_dir(memory_dir):
 
 
 def daily_log_path(memory_dir, today=None):
+    """返回今日日志文件的路径，按年/月/日组织目录。"""
     today = today or date.today()
     memory_dir = ensure_memory_dir(memory_dir)
     path = memory_dir / "logs" / str(today.year) / f"{today.month:02d}" / f"{today.isoformat()}.md"
@@ -95,6 +97,7 @@ def daily_log_path(memory_dir, today=None):
 
 
 def append_to_daily_log(memory_dir, entry, today=None):
+    """向每日日志文件追加一条带时间戳的条目，返回路径。"""
     entry = str(entry).strip()
     if not entry:
         return None
@@ -106,6 +109,7 @@ def append_to_daily_log(memory_dir, entry, today=None):
 
 
 def default_memory_maintenance_audit(auto_dream=True):
+    """返回默认的记忆维护审计记录结构。"""
     return {
         "memory_tags_appended": [],
         "auto_dream": {
@@ -121,6 +125,7 @@ def default_memory_maintenance_audit(auto_dream=True):
 
 
 def _agent_relative_path(agent, path):
+    """将路径转换为相对于 agent 工作区的 POSIX 风格路径。"""
     try:
         return Path(path).resolve().relative_to(agent.root).as_posix()
     except ValueError:
@@ -128,6 +133,7 @@ def _agent_relative_path(agent, path):
 
 
 def _memory_file_snapshot(agent):
+    """对记忆目录下所有文件做 SHA256 哈希快照。"""
     memory_dir = Path(agent.memory_dir)
     if not memory_dir.exists():
         return {}
@@ -144,10 +150,12 @@ def _memory_file_snapshot(agent):
 
 
 def _changed_memory_files(before, after):
+    """比较前后快照，返回发生变化的文件路径列表。"""
     return sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
 
 
 def _emit_memory_trace(agent, event, payload):
+    """向当前任务状态发送记忆追踪事件。"""
     task_state = getattr(agent, "current_task_state", None)
     if task_state is None:
         return None
@@ -155,6 +163,7 @@ def _emit_memory_trace(agent, event, payload):
 
 
 def _write_memory_maintenance_report(agent, task_state, audit):
+    """将记忆维护审计结果写入运行报告。"""
     try:
         if agent.run_store.report_path(task_state).exists():
             report = agent.run_store.load_report(task_state)
@@ -167,6 +176,7 @@ def _write_memory_maintenance_report(agent, task_state, audit):
 
 
 def load_memory_index_text(memory_dir):
+    """加载 MEMORY.md 索引文本，占位模板无条目时返回空字符串。"""
     path = Path(memory_dir) / ENTRYPOINT_NAME
     if not path.exists():
         return ""
@@ -182,6 +192,7 @@ def load_memory_index_text(memory_dir):
 
 
 def extract_memory_tags(text):
+    """从文本中提取所有 <memory> 标签内的内容列表。"""
     return [match.strip() for match in re.findall(r"<memory>(.*?)</memory>", str(text), re.DOTALL) if match.strip()]
 
 
@@ -228,10 +239,12 @@ def _os_unlock(fd):
 
 
 def _lock_path(memory_dir):
+    """返回锁文件的完整路径。"""
     return Path(memory_dir) / LOCK_FILE_NAME
 
 
 def read_last_consolidated_at(memory_dir):
+    """读取上次 consolidation 的时间戳（mtime），失败返回 0。"""
     try:
         return _lock_path(memory_dir).stat().st_mtime
     except OSError:
@@ -239,6 +252,7 @@ def read_last_consolidated_at(memory_dir):
 
 
 def try_acquire_lock(memory_dir):
+    """尝试获取 OS 级互斥锁，成功返回 True，被持有返回 False。"""
     ensure_memory_dir(memory_dir)
     lock_path = _lock_path(memory_dir)
     current_pid = os.getpid()
@@ -310,6 +324,7 @@ def release_lock(memory_dir):
 
 
 def record_consolidation(memory_dir):
+    """记录 consolidation 完成的时间戳到锁文件。"""
     ensure_memory_dir(memory_dir)
     lock_path = _lock_path(memory_dir)
     lock_path.write_text(str(os.getpid()), encoding="utf-8")
@@ -318,6 +333,7 @@ def record_consolidation(memory_dir):
 
 
 def list_sessions_since(since_ts, sessions_dir=None, current_session_id=""):
+    """列出自指定时间戳以来新增的 session ID 列表。"""
     scan_dir = Path(sessions_dir) if sessions_dir is not None else None
     if scan_dir is None or not scan_dir.exists():
         return []
@@ -334,10 +350,12 @@ def list_sessions_since(since_ts, sessions_dir=None, current_session_id=""):
 
 
 def should_auto_dream(memory_dir, min_hours, min_sessions, current_session_id, sessions_dir=None):
+    """判断是否应自动执行 dream consolidation。"""
     return evaluate_auto_dream_gate(memory_dir, min_hours, min_sessions, current_session_id, sessions_dir=sessions_dir)["should_run"]
 
 
 def evaluate_auto_dream_gate(memory_dir, min_hours, min_sessions, current_session_id, sessions_dir=None):
+    """评估自动 dream 条件是否满足，返回含 should_run 的详细结果。"""
     last = read_last_consolidated_at(memory_dir)
     current = datetime.now().timestamp()
     hours_since = (current - last) / 3600 if last > 0 else float("inf")
@@ -359,6 +377,7 @@ def evaluate_auto_dream_gate(memory_dir, min_hours, min_sessions, current_sessio
 
 
 def build_memory_system_section(memory_dir):
+    """构建记忆系统说明文本块，供模型 prompt 中注入使用。"""
     index = load_memory_index_text(memory_dir)
     if index:
         index_section = f"## Current Memory Index ({ENTRYPOINT_NAME})\n{index}\n"
@@ -447,6 +466,7 @@ Then add a pointer to that file in `{Path(memory_dir)}/{ENTRYPOINT_NAME}`. MEMOR
 
 
 def build_dream_prompt(memory_dir, transcript_dir="", session_ids=None):
+    """构建 dream consolidation 任务的 prompt 文本。"""
     session_ids = list(session_ids or [])
     total = len(session_ids)
     truncated = False
@@ -522,6 +542,7 @@ Return a brief summary of what you consolidated, updated, or pruned. If nothing 
 
 
 def reject_durable_reason(note_text, redacted_value="<redacted>"):
+    """检查笔记文本是否符合持久记忆格式，不符合则返回拒绝原因。"""
     text = str(note_text or "").strip()
     lowered = text.lower()
     if not text:
@@ -551,6 +572,7 @@ def reject_durable_reason(note_text, redacted_value="<redacted>"):
 
 
 def extract_durable_promotions(user_message, final_answer, redacted_value="<redacted>"):
+    """从用户消息和回答中提取结构化持久记忆条目。"""
     user_text = str(user_message or "")
     if not (DURABLE_MEMORY_INTENT_PATTERN.search(user_text) or DURABLE_MEMORY_INTENT_ZH_PATTERN.search(user_text)):
         return [], []
@@ -576,6 +598,7 @@ def extract_durable_promotions(user_message, final_answer, redacted_value="<reda
 
 
 def promote_durable_memory(agent, user_message, final_answer):
+    """将提取的持久记忆提升写入 durable 存储并更新 agent 状态。"""
     promotions, rejections = extract_durable_promotions(user_message, final_answer)
     promoted, superseded = agent.memory.promote_durable(promotions)
     agent.session["memory"] = agent.memory.to_dict()
@@ -586,6 +609,7 @@ def promote_durable_memory(agent, user_message, final_answer):
 
 
 def run_dream(agent, quiet=False, session_ids=None):
+    """执行一次 dream consolidation，启动子 agent 处理记忆合并。"""
     from ..core.runtime import Iatcoder
 
     ensure_memory_dir(agent.memory_dir)
@@ -625,6 +649,7 @@ def run_dream(agent, quiet=False, session_ids=None):
 
 
 def maintain_memory_after_turn(agent, final_answer):
+    """每轮对话后维护记忆：提取 <memory> 标签并按需触发 auto dream。"""
     audit = default_memory_maintenance_audit(auto_dream=agent.auto_dream)
     agent.last_memory_maintenance = audit
     for entry in extract_memory_tags(final_answer):
@@ -696,6 +721,7 @@ def maintain_memory_after_turn(agent, final_answer):
 
 
 def default_memory_state():
+    """返回默认的紧凑工作记忆状态结构。"""
     # 用一个小而结构化的状态，而不是一大段自由文本摘要。
     return {
         "working": {
@@ -713,14 +739,17 @@ def default_memory_state():
 
 class DurableMemoryStore:
     def __init__(self, root):
+        """初始化持久记忆存储，绑定根目录和索引路径。"""
         self.root = Path(root)
         self.index_path = self.root / "MEMORY.md"
         self.topics_dir = self.root / "topics"
 
     def topic_slugs(self):
+        """返回所有 topic 的 slug 名称列表。"""
         return [topic["topic"] for topic in self.load_index()]
 
     def load_index(self):
+        """加载 MEMORY.md 索引文件，解析为 topic 条目列表。"""
         if not self.index_path.exists():
             return []
         lines = self.index_path.read_text(encoding="utf-8").splitlines()
@@ -750,6 +779,7 @@ class DurableMemoryStore:
         return topics
 
     def load_topic_notes(self, topic):
+        """加载指定 topic 文件中的笔记列表。"""
         path = self.topics_dir / f"{topic}.md"
         if not path.exists():
             return []
@@ -780,6 +810,7 @@ class DurableMemoryStore:
 
     @staticmethod
     def _subject_key(text):
+        """从文本中提取主语作为去重键，用于合并同主题笔记。"""
         text = str(text).strip()
         patterns = (
             r"^(.+?)\s+is\s+.+$",
@@ -797,6 +828,7 @@ class DurableMemoryStore:
         return None
 
     def retrieval_candidates(self, query, limit=3):
+        """从持久记忆中召回与查询相关的笔记，按标签和关键词排序。"""
         query_tokens = _tokenize(query)
         ranked = []
         for topic in self.load_index():
@@ -814,6 +846,7 @@ class DurableMemoryStore:
         return [note for _, note in ranked[:limit]]
 
     def _write_index(self, topics):
+        """将 topics 列表写回 MEMORY.md 索引文件。"""
         self.root.mkdir(parents=True, exist_ok=True)
         self.topics_dir.mkdir(parents=True, exist_ok=True)
         lines = ["# Durable Memory Index", ""]
@@ -824,6 +857,7 @@ class DurableMemoryStore:
         self.index_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
     def _write_topic(self, topic, notes):
+        """将笔记列表写入指定 topic 的 .md 文件。"""
         self.topics_dir.mkdir(parents=True, exist_ok=True)
         meta = DURABLE_TOPIC_DEFAULTS[topic]
         lines = [
@@ -841,6 +875,7 @@ class DurableMemoryStore:
         (self.topics_dir / f"{topic}.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
     def promote(self, promotions):
+        """将 promotions 写入持久记忆，返回提升和替换的条目列表。"""
         if not promotions:
             return [], []
         topics = {topic["topic"]: topic for topic in self.load_index()}
@@ -880,6 +915,7 @@ class DurableMemoryStore:
 
 
 def _ensure_list(value):
+    """确保返回值是 list 类型，兼容 None、tuple、set 等输入。"""
     if isinstance(value, list):
         return value
     if isinstance(value, tuple):
@@ -892,6 +928,7 @@ def _ensure_list(value):
 
 
 def _dedupe_preserve_order(items):
+    """对列表去重并保持元素原始顺序。"""
     seen = set()
     result = []
     for item in items:
@@ -903,6 +940,7 @@ def _dedupe_preserve_order(items):
 
 
 def resolve_workspace_path(raw_path, workspace_root=None):
+    """将路径解析为工作区内的绝对路径，越界则返回 None。"""
     path = Path(str(raw_path))
     if workspace_root is None:
         return path
@@ -918,6 +956,7 @@ def resolve_workspace_path(raw_path, workspace_root=None):
 
 
 def canonicalize_path(raw_path, workspace_root=None):
+    """将路径规范化为相对于工作区的 POSIX 风格路径。"""
     resolved = resolve_workspace_path(raw_path, workspace_root)
     if resolved is None:
         return Path(str(raw_path)).as_posix()
@@ -928,6 +967,7 @@ def canonicalize_path(raw_path, workspace_root=None):
 
 
 def file_freshness(raw_path, workspace_root=None):
+    """计算文件当前内容的 SHA256 作为 freshness 标记。"""
     resolved = resolve_workspace_path(raw_path, workspace_root)
     if resolved is None or not resolved.exists() or not resolved.is_file():
         return None
@@ -935,10 +975,12 @@ def file_freshness(raw_path, workspace_root=None):
 
 
 def _tokenize(text):
+    """将文本分词为小写 token 集合，用于关键词匹配。"""
     return {token.lower() for token in re.findall(r"[A-Za-z0-9_]+", str(text))}
 
 
 def _parse_timestamp(value):
+    """将 ISO 时间戳字符串解析为 Unix 时间戳浮点数。"""
     if not value:
         return 0.0
     try:
@@ -948,6 +990,7 @@ def _parse_timestamp(value):
 
 
 def _normalize_note(note, index):
+    """将笔记规范化为统一字典格式，兼容字符串和字典输入。"""
     if isinstance(note, str):
         text = clip(note.strip(), 500)
         return {
@@ -987,12 +1030,13 @@ def _normalize_note(note, index):
 
 
 def normalize_memory_state(state, workspace_root=None):
+    """规范化记忆状态，兼容旧格式并整理为当前 runtime 的紧凑结构。"""
     if state is None:
         state = default_memory_state()
     elif not isinstance(state, dict):
         raise TypeError("memory state must be a mapping")
 
-    # 规范化层的作用，是把“磁盘里可能长得不太一样的旧状态”
+    # 规范化层的作用，是把"磁盘里可能长得不太一样的旧状态"
     # 统一整理成当前 runtime 可直接使用的紧凑结构。
     working = state.get("working")
     if not isinstance(working, dict):
@@ -1080,6 +1124,7 @@ def normalize_memory_state(state, workspace_root=None):
 
 
 def set_task_summary(state, summary, workspace_root=None):
+    """设置工作记忆中的当前任务摘要。"""
     state = normalize_memory_state(state, workspace_root)
     state["working"]["task_summary"] = clip(str(summary).strip(), 300)
     state["task"] = state["working"]["task_summary"]
@@ -1087,6 +1132,7 @@ def set_task_summary(state, summary, workspace_root=None):
 
 
 def remember_file(state, path, workspace_root=None):
+    """将文件路径记录到工作记忆的近期文件列表。"""
     state = normalize_memory_state(state, workspace_root)
     path = canonicalize_path(path, workspace_root).strip()
     if not path:
@@ -1099,6 +1145,7 @@ def remember_file(state, path, workspace_root=None):
 
 
 def append_note(state, text, tags=(), source="", created_at=None, workspace_root=None, kind="episodic"):
+    """向情景笔记列表追加一条笔记，自动去重。"""
     state = normalize_memory_state(state, workspace_root)
     text = clip(str(text).strip(), 500)
     if not text:
@@ -1123,6 +1170,7 @@ def append_note(state, text, tags=(), source="", created_at=None, workspace_root
     state["notes"] = [item["text"] for item in state["episodic_notes"]]
     return state
 def set_file_summary(state, path, summary, workspace_root=None):
+    """设置工作记忆中某个文件的简短摘要。"""
     state = normalize_memory_state(state, workspace_root)
     path = canonicalize_path(path, workspace_root).strip()
     summary = clip(str(summary).strip(), 500)
@@ -1137,6 +1185,7 @@ def set_file_summary(state, path, summary, workspace_root=None):
 
 
 def invalidate_file_summary(state, path, workspace_root=None):
+    """从工作记忆中移除指定文件的摘要。"""
     state = normalize_memory_state(state, workspace_root)
     path = canonicalize_path(path, workspace_root).strip()
     if not path:
@@ -1146,6 +1195,7 @@ def invalidate_file_summary(state, path, workspace_root=None):
 
 
 def invalidate_stale_file_summaries(state, workspace_root=None):
+    """清除所有 freshness 已过期的文件摘要，返回被清除的路径列表。"""
     state = normalize_memory_state(state, workspace_root)
     invalidated = []
     for path, summary in list(state["file_summaries"].items()):
@@ -1158,8 +1208,9 @@ def invalidate_stale_file_summaries(state, workspace_root=None):
 
 
 def summarize_read_result(result, limit=180):
+    """将读取结果压缩为短摘要字符串，避免完整内容塞入记忆。"""
     # 我们不会把完整文件内容塞进记忆层，
-    # 这里只保留足够提醒下一轮“刚刚读到了什么”的短摘要。
+    # 这里只保留足够提醒下一轮"刚刚读到了什么"的短摘要。
     lines = [line.strip() for line in str(result).splitlines() if line.strip()]
     if not lines:
         return "(empty)"
@@ -1172,6 +1223,7 @@ def summarize_read_result(result, limit=180):
 
 
 def retrieval_candidates(state, query, limit=3, workspace_root=None):
+    """从情景笔记和持久记忆中召回与查询相关的候选条目。"""
     state = normalize_memory_state(state, workspace_root)
     query_tokens = _tokenize(query)
     ranked = []
@@ -1203,6 +1255,7 @@ def retrieval_candidates(state, query, limit=3, workspace_root=None):
 
 
 def retrieval_view(state, query, limit=3, workspace_root=None):
+    """生成召回结果的可读文本视图。"""
     candidates = retrieval_candidates(state, query, limit=limit, workspace_root=workspace_root)
     lines = ["Relevant memory:"]
     if not candidates:
@@ -1214,8 +1267,9 @@ def retrieval_view(state, query, limit=3, workspace_root=None):
 
 
 def render_memory_text(state, workspace_root=None):
+    """将工作记忆渲染为紧凑仪表盘文本，供模型查看。"""
     state = normalize_memory_state(state, workspace_root)
-    # 这里渲染的是给模型看的紧凑“仪表盘”，不是完整回放。
+    # 这里渲染的是给模型看的紧凑"仪表盘"，不是完整回放。
     # 笔记正文默认不展开，只有在相关召回时才按需拿出来。
     lines = [
         "Memory:",
@@ -1242,6 +1296,7 @@ def render_memory_text(state, workspace_root=None):
 
 
 def is_effectively_empty(state, workspace_root=None):
+    """判断工作记忆的所有字段是否实质上均为空。"""
     state = normalize_memory_state(state, workspace_root)
     return (
         not str(state["working"]["task_summary"]).strip()
@@ -1253,26 +1308,32 @@ def is_effectively_empty(state, workspace_root=None):
 
 class LayeredMemory:
     def __init__(self, state=None, workspace_root=None):
+        """初始化分层记忆，规范化状态并绑定持久存储。"""
         self.workspace_root = workspace_root
         self.state = normalize_memory_state(state, workspace_root)
         self.durable_store = DurableMemoryStore(Path(workspace_root) / ".iatcoder" / "memory") if workspace_root is not None else None
 
     def to_dict(self):
+        """将当前记忆状态导出为字典。"""
         self.state = normalize_memory_state(self.state, self.workspace_root)
         return self.state
 
     def canonical_path(self, path):
+        """将路径规范化为相对于工作区的 POSIX 路径。"""
         return canonicalize_path(path, self.workspace_root)
 
     def set_task_summary(self, summary):
+        """设置当前任务摘要到工作记忆中。"""
         self.state = set_task_summary(self.state, summary, self.workspace_root)
         return self
 
     def remember_file(self, path):
+        """记录一个文件路径到近期文件列表。"""
         self.state = remember_file(self.state, path, self.workspace_root)
         return self
 
     def append_note(self, text, tags=(), source="", created_at=None, kind="episodic"):
+        """向情景笔记列表追加一条笔记。"""
         self.state = append_note(
             self.state,
             text,
@@ -1285,27 +1346,34 @@ class LayeredMemory:
         return self
 
     def set_file_summary(self, path, summary):
+        """设置指定文件的摘要信息。"""
         self.state = set_file_summary(self.state, path, summary, self.workspace_root)
         return self
 
     def invalidate_file_summary(self, path):
+        """使指定文件的摘要失效。"""
         self.state = invalidate_file_summary(self.state, path, self.workspace_root)
         return self
 
     def invalidate_stale_file_summaries(self):
+        """使所有 freshness 已过期的文件摘要失效。"""
         self.state, invalidated = invalidate_stale_file_summaries(self.state, self.workspace_root)
         return invalidated
 
     def retrieval_candidates(self, query, limit=3):
+        """从记忆中召回与查询相关的候选条目。"""
         return retrieval_candidates(self.state, query, limit=limit, workspace_root=self.workspace_root)
 
     def retrieval_view(self, query, limit=3):
+        """生成召回结果的可读文本。"""
         return retrieval_view(self.state, query, limit=limit, workspace_root=self.workspace_root)
 
     def render_memory_text(self):
+        """将记忆状态渲染为供模型查看的文本。"""
         return render_memory_text(self.state, self.workspace_root)
 
     def promote_durable(self, promotions):
+        """将条目提升写入持久记忆存储，返回提升和被替换的条目。"""
         if self.durable_store is None:
             return [], []
         self.state = normalize_memory_state(self.state, self.workspace_root)

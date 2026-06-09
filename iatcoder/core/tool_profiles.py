@@ -1,4 +1,7 @@
-"""Named tool capability surfaces for runtime modes."""
+"""工具能力集配置。
+
+不同运行时模式（default/plan/dream/readonly/worker）下
+可见的工具集合不同，避免模型在不当模式下使用风险动作。"""
 
 from dataclasses import dataclass
 
@@ -9,10 +12,12 @@ class ToolSetProfile:
     allowed_tools: frozenset[str]
 
     def allows(self, tool_name):
+        """判断工具是否在当前配置中允许使用。"""
         return tool_name in self.allowed_tools
 
 
 def build_tool_profiles(tools):
+    """根据不同运行时模式构建工具集配置。"""
     all_tools = frozenset(tools)
     coordinator_tools = frozenset({"agent", "send_message", "task_stop"})
     mode_tools = frozenset({"enter_plan_mode", "exit_plan_mode"})

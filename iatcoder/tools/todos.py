@@ -1,4 +1,7 @@
-"""Todo ledger tool definitions."""
+"""Todo 任务看板工具定义。
+
+todo_add / todo_update / todo_list 让模型可以在会话中
+管理任务状态，支持多步规划中的进度跟踪。"""
 
 TODO_TOOL_SPECS = {
     "todo_add": {

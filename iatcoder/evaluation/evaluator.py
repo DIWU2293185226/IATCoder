@@ -1,3 +1,7 @@
+"""基准测试运行器。
+
+加载 benchmark JSON 任务描述，在每个任务上运行 agent，
+用 verifier 检查结果并记录。"""
 import hashlib
 import json
 import locale as locale_module
@@ -112,6 +116,7 @@ SCRIPTED_MODEL_OUTPUTS = {
 
 
 def _git_value(args, fallback="", cwd=None):
+    """执行 git 命令并返回输出，失败时返回 fallback。"""
     try:
         result = subprocess.run(
             ["git", *args],
@@ -127,6 +132,7 @@ def _git_value(args, fallback="", cwd=None):
 
 
 def _current_locale():
+    """获取当前系统 locale 设置。"""
     try:
         return locale_module.setlocale(locale_module.LC_CTYPE)
     except Exception:
@@ -134,10 +140,12 @@ def _current_locale():
 
 
 def _now_in_timezone(timezone_name):
+    """获取指定时区的当前时间字符串。"""
     return datetime.now(ZoneInfo(timezone_name)).strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
 def _artifact_path_for_task(task):
+    """从 fixture repo 名称推断预期工件路径。"""
     fixture_repo_name = Path(str(task["fixture_repo"])).name
     if fixture_repo_name not in TASK_FIXTURE_ARTIFACTS:
         raise ValueError(f"unsupported fixture repo for artifact lookup: {fixture_repo_name}")
@@ -145,10 +153,12 @@ def _artifact_path_for_task(task):
 
 
 def _workspace_relative(path, workspace_root):
+    """将绝对路径转换为相对于 workspace 的路径。"""
     return str(Path(path).resolve().relative_to(Path(workspace_root).resolve()))
 
 
 def _scripted_outputs_for_task(task):
+    """获取 benchmark 任务对应的脚本化模型输出。"""
     outputs = SCRIPTED_MODEL_OUTPUTS.get(task["id"])
     if outputs is None:
         raise ValueError(f"no scripted model outputs for benchmark task: {task['id']}")
@@ -156,6 +166,7 @@ def _scripted_outputs_for_task(task):
 
 
 def _fixture_snapshot_id(fixture_paths):
+    """计算 fixture 目录内容的 SHA256 快照 ID。"""
     sha = hashlib.sha256()
     for fixture_path in sorted({Path(path).resolve() for path in fixture_paths}, key=lambda path: str(path)):
         for path in sorted((item for item in fixture_path.rglob("*") if item.is_file()), key=lambda item: str(item.relative_to(fixture_path))):
@@ -169,6 +180,7 @@ def _fixture_snapshot_id(fixture_paths):
 
 
 def validate_benchmark(data, repo_root=None):
+    """校验 benchmark JSON 数据结构是否符合规范。"""
     if not isinstance(data, dict):
         raise ValueError("benchmark must be a mapping")
 
@@ -239,6 +251,7 @@ def validate_benchmark(data, repo_root=None):
 
 
 def load_benchmark(path=DEFAULT_BENCHMARK_PATH, repo_root=None):
+    """从 JSON 文件加载并校验 benchmark 数据。"""
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8"))
     if repo_root is None:
@@ -247,6 +260,7 @@ def load_benchmark(path=DEFAULT_BENCHMARK_PATH, repo_root=None):
 
 
 def summarize_rows(rows):
+    """汇总 benchmark 行数据，计算通过率等统计指标。"""
     rows = list(rows)
     passed = sum(1 for row in rows if row.get("passed") or row.get("status") == "pass")
     failed = len(rows) - passed
@@ -285,6 +299,7 @@ def _checkpoint_payload(
     freshness=None,
     summary="",
 ):
+    """构建 checkpoint 数据载荷。"""
     return {
         "checkpoint_id": checkpoint_id,
         "parent_checkpoint_id": "",
@@ -303,6 +318,7 @@ def _checkpoint_payload(
 
 
 def _apply_task_setup(agent, task, fixture_copy_root):
+    """在运行任务前对 agent 施加配置（如 context_reduction, freshness_mismatch 等）。"""
     setup = dict(task.get("setup", {}) or {})
     if not setup:
         return
@@ -391,6 +407,7 @@ class BenchmarkEvaluator:
         timezone_name=DEFAULT_TIMEZONE,
         model_client_factory=None,
     ):
+        """初始化 BenchmarkEvaluator，配置路径和模型参数。"""
         self.benchmark_path = Path(benchmark_path)
         self.artifact_path = Path(artifact_path)
         self.workspace_root = Path(workspace_root) if workspace_root is not None else Path(
@@ -406,9 +423,11 @@ class BenchmarkEvaluator:
         self.repo_root = self.benchmark_path.resolve().parent.parent
 
     def load(self):
+        """加载并校验 benchmark 数据。"""
         return load_benchmark(self.benchmark_path, repo_root=self.repo_root)
 
     def run(self):
+        """运行所有 benchmark 任务并生成结果工件。"""
         benchmark = self.load()
         rows = [self.run_task(task) for task in benchmark["tasks"]]
         summary = summarize_rows(rows)
@@ -445,6 +464,7 @@ class BenchmarkEvaluator:
         return artifact
 
     def run_task(self, task):
+        """运行单个 benchmark 任务，返回详细结果行。"""
         task = dict(task)
         fixture_source = self.repo_root / task["fixture_repo"]
         fixture_copy_root = self.workspace_root / task["id"] / fixture_source.name
@@ -557,6 +577,7 @@ class BenchmarkEvaluator:
         expected_artifact_exists,
         non_failure_stop_reason,
     ):
+        """根据失败条件推断失败类别。"""
         if not expected_artifact_exists:
             return "missing_artifact"
         if not within_budget:
@@ -568,11 +589,13 @@ class BenchmarkEvaluator:
         return "unknown"
 
     def _write_artifact(self, artifact):
+        """将结果工件写入 JSON 文件。"""
         self.artifact_path.parent.mkdir(parents=True, exist_ok=True)
         self.artifact_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _digest_file(path):
+    """计算文件的 SHA256 摘要。"""
     return "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
@@ -588,6 +611,7 @@ def run_fixed_benchmark(
     timezone_name=DEFAULT_TIMEZONE,
     model_client_factory=None,
 ):
+    """便捷函数：创建 BenchmarkEvaluator 并运行。"""
     evaluator = BenchmarkEvaluator(
         benchmark_path=benchmark_path,
         artifact_path=artifact_path,
@@ -615,6 +639,7 @@ def run_harness_regression_v2(
     timezone_name=DEFAULT_TIMEZONE,
     model_client_factory=None,
 ):
+    """运行 harness regression v2 并写入专用 artifact 路径。"""
     return run_fixed_benchmark(
         benchmark_path=benchmark_path,
         artifact_path=artifact_path,

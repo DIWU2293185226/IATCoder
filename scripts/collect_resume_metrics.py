@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""收集 resume 场景的指标数据。"""
 import argparse
 import json
 import sys

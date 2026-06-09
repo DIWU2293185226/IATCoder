@@ -1,3 +1,4 @@
+"""ask_user 工具的测试。"""
 from iatcoder.testing import ScriptedModelClient
 from iatcoder import Iatcoder, SessionStore, WorkspaceContext
 

@@ -1,4 +1,7 @@
-"""Worker notification rendering."""
+"""Worker 通知渲染。
+
+把后台 worker 的执行结果渲染成 XML 格式的通知，
+注入主 agent 的对话历史让其感知。"""
 
 from xml.sax.saxutils import escape
 

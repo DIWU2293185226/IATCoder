@@ -1,4 +1,6 @@
-"""Optional shell sandbox runner."""
+"""沙盒运行器。
+
+实际执行 shell 命令，可选择通过 bubblewrap 隔离运行。"""
 
 import subprocess
 from pathlib import Path
@@ -11,12 +13,14 @@ from .config import SandboxConfig
 
 class SandboxRunner:
     def __init__(self, config=None, *, which=None, run=None, emit_event=None):
+        """初始化沙盒运行器。"""
         self.config = config or SandboxConfig()
         self.which = which or default_which
         self.run_process = run
         self.emit_event = emit_event or (lambda event, payload: None)
 
     def run(self, command, *, cwd, env, timeout):
+        """根据配置运行命令，可选择通过 bubblewrap 隔离。"""
         config = self.config
         if config.mode == "off" or (
             config.mode != "required"
@@ -45,6 +49,7 @@ class SandboxRunner:
         )
 
     def _plain(self, command, *, cwd, env, timeout):
+        """直接运行命令，不通过沙盒。"""
         run_process = self.run_process or subprocess.run
         return run_process(
             command,
@@ -57,6 +62,7 @@ class SandboxRunner:
         )
 
     def _bubblewrap_argv(self, backend_path, command, cwd, config):
+        """构造 bubblewrap 沙盒子进程参数列表。"""
         argv = [
             backend_path,
             "--die-with-parent",

@@ -1,4 +1,4 @@
-"""Command pattern matching for sandbox exclusions."""
+"""沙盒排除命令的模式匹配。"""
 
 from fnmatch import fnmatch
 

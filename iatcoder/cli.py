@@ -44,10 +44,13 @@ DEFAULT_SECRET_ENV_NAMES = (
 )
 
 WELCOME_ART = (
-    "        /\\___/\\\\",
-    "       (  o o  )",
-    "       /   ^   \\\\",
-    "      /|       |\\\\",
+    "               ^\\",
+    "     /        //o__o",
+    "    /\\       /  __/",
+    "    \\ \\______\\  /",
+    "     \\         /",
+    "      \\ \\----\\ \\",
+    "       \\_\\_   \\_\\_\\",
 )
 WELCOME_NAME = "iatcoder"
 WELCOME_SUBTITLE = "local coding agent"
@@ -70,6 +73,7 @@ SECRET_ENV_NAMES_VAR = "IATCODER_SECRET_ENV_NAMES"
 
 
 def _configured_secret_names(args):
+    """合并默认和用户指定的敏感环境变量名列表。"""
     configured_secret_names = set(DEFAULT_SECRET_ENV_NAMES)
     configured_secret_names.update(str(name).upper() for name in args.secret_env_names)
     extra_names = os.environ.get(SECRET_ENV_NAMES_VAR, "")
@@ -115,6 +119,7 @@ def _build_model_client(args):
 
 
 def build_welcome(agent, model, host):
+    """构建启动时显示的工作台欢迎界面。"""
     width = max(68, min(shutil.get_terminal_size((80, 20)).columns, 84))
     inner = width - 4
     gap = 3
@@ -243,6 +248,7 @@ def build_agent(args):
 
 
 def build_arg_parser():
+    """构造并返回 CLI 参数解析器。"""
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description="Minimal coding agent for provider profiles backed by OpenAI-compatible or Anthropic-compatible APIs.",
@@ -362,6 +368,7 @@ def build_arg_parser():
 # ---------------------------------------------------------------------------
 
 def handle_repl_command(agent, user_input):
+    """分发 REPL 斜杠命令，返回 (已处理, 是否退出, 输出文本)。"""
     raw_command = ""
     command_args = ""
     command_name = ""
@@ -466,6 +473,7 @@ def handle_repl_command(agent, user_input):
 
 
 def _format_mode_status(agent):
+    """格式化当前运行时模式和计划路径。"""
     lines = [f"runtime mode: {agent.runtime_mode}"]
     plan_path = getattr(agent.plan_mode, "plan_path", "")
     if plan_path:
@@ -474,6 +482,7 @@ def _format_mode_status(agent):
 
 
 def _format_session_status(agent):
+    """格式化会话状态摘要（ID、路径、运行模式等）。"""
     task_state = getattr(agent, "current_task_state", None)
     run_id = getattr(task_state, "run_id", "") or ""
     run_dir = str(agent.run_store.run_dir(run_id)) if run_id else "-"
@@ -504,6 +513,7 @@ def _format_session_status(agent):
 
 
 def _format_subagent_status(agent):
+    """格式化子代理工具说明。"""
     return "\n".join(
         [
             "subagent tools: agent(description, prompt, subagent_type='Explore|worker', write_scope=[]), send_message(to, message), task_stop(task_id)",
@@ -513,6 +523,7 @@ def _format_subagent_status(agent):
 
 
 def _worker_summary(agent):
+    """生成工作线程摘要字符串。"""
     items = agent.worker_manager.to_dict().get("items", [])
     if not items:
         return "none"
@@ -520,6 +531,7 @@ def _worker_summary(agent):
 
 
 def _format_usage(agent):
+    """格式化模型用量和上下文统计信息。"""
     metadata = dict(getattr(agent, "last_completion_metadata", {}) or {})
     context_usage = dict(
         (getattr(agent, "last_prompt_metadata", {}) or {}).get("context_usage", {})
@@ -545,10 +557,12 @@ def _format_usage(agent):
 
 
 def _format_model(agent):
+    """格式化当前模型名称。"""
     return f"model: {getattr(agent.model_client, 'model', '-') or '-'}"
 
 
 def _format_history(agent):
+    """列出所有历史会话记录。"""
     rows = agent.session_store.list_sessions()
     if not rows:
         return "(no sessions)"
@@ -562,6 +576,7 @@ def _format_history(agent):
 
 
 def _resolve_session_id(agent, target):
+    """根据序号或 ID 解析会话标识符。"""
     if target == "latest":
         return agent.session_store.latest()
     rows = agent.session_store.list_sessions()
@@ -577,6 +592,7 @@ def _resolve_session_id(agent, target):
 
 
 def _cli_ask_user(question, choices):
+    """CLI 模式下询问用户并获取输入。"""
     if choices:
         print(question)
         for index, choice in enumerate(choices, start=1):
@@ -589,6 +605,7 @@ def _cli_ask_user(question, choices):
 
 
 def _drain_idle_worker_notifications(agent):
+    """清空并打印后台工作线程通知。"""
     notifications = agent.engine.drain_worker_notifications()
     for notification in notifications:
         print(f"\n[worker notification]\n{notification}")
@@ -596,6 +613,7 @@ def _drain_idle_worker_notifications(agent):
 
 
 def interaction_mode(args):
+    """根据参数和终端状态决定交互模式（one_shot/repl/tui）。"""
     if args.prompt:
         return "one_shot"
     if getattr(args, "repl", False):

@@ -1,4 +1,7 @@
-"""Structured trace event helpers."""
+"""结构化的 trace 事件构建函数。
+
+把每个运行时事件（run_started、prompt_built、tool_executed 等）
+包装成统一的 payload 格式，附加阶段、状态、span 等元数据。"""
 
 from .workspace import now
 

@@ -1,7 +1,6 @@
-"""Release smoke tests.
+"""Release 冒烟测试。
 
-This module verifies the two end-to-end user journeys that must work before
-public release:
+验证在发布前必须工作的两个端到端用户旅程：
 
 1. **basic edit flow** — read a file, propose a patch, apply it
 2. **dream consolidation** — auto-dream produces non-empty topic files

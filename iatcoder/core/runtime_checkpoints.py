@@ -1,4 +1,7 @@
-"""Runtime workspace snapshot and checkpoint helpers."""
+"""运行时工作区快照和检查点。
+
+在工具执行前后捕获工作区文件哈希快照，diff 出变更，
+并在关键节点创建检查点供 resume 恢复。"""
 
 import hashlib
 import uuid
@@ -11,6 +14,7 @@ CHECKPOINT_SCHEMA_VERSION = "phase1-v1"
 
 class RuntimeCheckpointsMixin:
     def capture_workspace_snapshot(self):
+        """捕获工作区文件的哈希快照。"""
         snapshot = {}
         for path in self.root.rglob("*"):
             try:
@@ -27,6 +31,7 @@ class RuntimeCheckpointsMixin:
 
     @staticmethod
     def diff_workspace_snapshots(before, after):
+        """比较两个快照，返回变更路径和摘要。"""
         changed_paths = []
         summaries = []
         for path in sorted(set(before) | set(after)):
@@ -42,6 +47,7 @@ class RuntimeCheckpointsMixin:
         return changed_paths, summaries
 
     def create_checkpoint(self, task_state, user_message, trigger):
+        """在关键节点创建检查点，用于 resume 恢复。"""
         state = self.checkpoint_state()
         current = self.current_checkpoint()
         checkpoint_id = "ckpt_" + uuid.uuid4().hex[:8]

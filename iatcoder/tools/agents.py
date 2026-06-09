@@ -1,4 +1,8 @@
-"""Coordinator subagent tool definitions."""
+"""子 agent 工具定义。
+
+agent / send_message / task_stop 三个工具让主 agent
+可以启动子 agent（Explore 只读或 worker 可写）、
+向子 agent 发消息、或停止子 agent。"""
 
 from ..core.worker_manager import dumps_payload
 

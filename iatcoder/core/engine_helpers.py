@@ -1,6 +1,6 @@
-# engine_helpers.py: Engine 控制循环用到的执行和收尾辅助函数.
-# 职责包括: 工具分发执行、中止/超限的优雅结束、step-limit 摘要请求.
-# 这些函数从 Engine.run_turn() 内部 yield 调用, 共享 engine/runtime/task_state 上下文.
+"""Engine 辅助函数：工具执行、中止/超限收尾、step-limit 摘要。
+
+从 Engine.run_turn() 内部 yield 调用，共享 engine/runtime/task_state 上下文。"""
 
 import time
 

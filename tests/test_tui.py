@@ -1,3 +1,4 @@
+"""TUI 界面测试。"""
 import pytest
 
 from iatcoder import Iatcoder, SessionStore, WorkspaceContext

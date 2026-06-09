@@ -20,10 +20,12 @@ IGNORED_PATH_NAMES = {".git", ".iatcoder", "__pycache__", ".pytest_cache", ".ruf
 
 
 def now():
+    """返回当前 UTC ISO 时间戳。"""
     return datetime.now(timezone.utc).isoformat()
 
 
 def clip(text, limit=MAX_TOOL_OUTPUT):
+    """截断文本至指定长度，超长部分用省略号标记。"""
     text = str(text)
     if len(text) <= limit:
         return text
@@ -31,6 +33,7 @@ def clip(text, limit=MAX_TOOL_OUTPUT):
 
 
 def middle(text, limit):
+    """居中截断字符串，中间用省略号替代。"""
     text = str(text).replace("\n", " ")
     if len(text) <= limit:
         return text
@@ -43,6 +46,7 @@ def middle(text, limit):
 
 class WorkspaceContext:
     def __init__(self, cwd, repo_root, branch, default_branch, status, recent_commits, project_docs):
+        """初始化工作区上下文。"""
         self.cwd = cwd
         self.repo_root = repo_root
         self.branch = branch
@@ -53,6 +57,7 @@ class WorkspaceContext:
 
     @classmethod
     def build(cls, cwd, repo_root_override=None):
+        """从工作目录构造 WorkspaceContext，收集 Git 信息和项目文档。"""
         cwd = Path(cwd).resolve()
 
         def git(args, fallback=""):
@@ -100,7 +105,7 @@ class WorkspaceContext:
         )
 
     def text(self):
-        # 这段文本会被塞进 prompt prefix，作为相对稳定的基线上下文。
+        """返回工作区摘要文本，供 prompt prefix 使用。"""
         commits = "\n".join(f"- {line}" for line in self.recent_commits) or "- none"
         docs = "\n".join(f"- {path}\n{snippet}" for path, snippet in self.project_docs.items()) or "- none"
         return textwrap.dedent(
@@ -120,8 +125,7 @@ class WorkspaceContext:
         ).strip()
 
     def fingerprint(self):
-        # 这个指纹用来判断仓库状态是否发生了足够大的变化，
-        # 从而决定是否需要重建缓存中的 prompt prefix。
+        """计算仓库状态的哈希指纹，用于判断是否需要重建 prefix。"""
         payload = {
             "cwd": self.cwd,
             "repo_root": self.repo_root,

@@ -1,4 +1,7 @@
-"""Project-local configuration helpers."""
+"""项目级配置解析。
+
+负责从 TOML 文件 / 环境变量 / .env 文件 / CLI 参数中
+解析 provider、model、api_key、sandbox 等配置项。"""
 
 import os
 import re

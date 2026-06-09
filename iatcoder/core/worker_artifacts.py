@@ -1,4 +1,7 @@
-"""Evidence extraction for worker child runs."""
+"""子 agent 运行证据提取。
+
+从子 agent 的运行目录中提取 run_id、report、trace 等工件路径，
+以及工具错误码汇总。"""
 
 import json
 

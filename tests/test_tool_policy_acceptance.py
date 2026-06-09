@@ -1,3 +1,4 @@
+"""工具策略验收测试。"""
 import json
 import shlex
 import sys

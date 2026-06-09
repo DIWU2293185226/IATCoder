@@ -33,6 +33,7 @@ class Engine:
     """
 
     def __init__(self, runtime):
+        """初始化引擎，绑定运行时实例。"""
         self.runtime = runtime
 
     def ask(self, user_message):
@@ -44,6 +45,7 @@ class Engine:
         return final_answer
 
     def drain_worker_notifications(self):
+        """清空工作线程通知，记录到会话。"""
         agent = self.runtime
         notifications = agent.worker_manager.drain_notifications()
         for notification in notifications:
@@ -58,6 +60,7 @@ class Engine:
         return notifications
 
     def _drain_worker_notification_events(self):
+        """清空通知并逐个 yield 为事件。"""
         for notification in self.drain_worker_notifications():
             yield {
                 "type": "worker_notification",

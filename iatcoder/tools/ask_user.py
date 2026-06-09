@@ -1,4 +1,6 @@
-"""User clarification tool definitions."""
+"""ask_user 工具定义。
+
+允许模型在交互式会话中向用户提问，获取必要的信息或选择。"""
 
 ASK_USER_TOOL_SPECS = {
     "ask_user": {

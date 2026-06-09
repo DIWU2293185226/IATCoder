@@ -1,10 +1,12 @@
-# model_output.py: 解析模型输出的文本协议.
-# Iatcoder 使用纯文本协议, 而非 JSON function calling:
+"""模型输出解析：将模型返回的纯文本解析为工具调用或最终回答。
+
+Iatcoder 使用纯文本协议，而非 JSON function calling：
 #   <tool>{"name":"xxx","args":{...}}</tool>  -> tool 调用
 #   <tool name="xxx" path="..."><content>...</content></tool>  -> XML 风格
 #   <final>answer</final>  -> 最终回答
 #   (其它格式)  -> retry
 # parse() 是 Engine.run_turn() 中模型调用后的第一道工序.
+"""
 
 import json
 import re

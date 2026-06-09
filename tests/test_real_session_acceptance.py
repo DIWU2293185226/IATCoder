@@ -1,3 +1,4 @@
+"""真实会话验收测试。"""
 import json
 import importlib.util
 from pathlib import Path

@@ -1,10 +1,14 @@
-"""Turn-aware transcript rendering."""
+"""Turn 感知的对话历史渲染。
+
+按 turn 分组历史事件，对较早的内容做压缩和摘要，
+对最近的内容保留详细文本，控制 prompt 中的历史段大小。"""
 
 import json
 from collections import OrderedDict
 
 
 def tail_clip(text, limit):
+    """截断文本到指定长度，尾部加省略号。"""
     text = str(text)
     if limit <= 0:
         return ""
@@ -17,9 +21,11 @@ def tail_clip(text, limit):
 
 class TurnHistoryBuilder:
     def __init__(self, agent):
+        """初始化 TurnHistoryBuilder，绑定 agent 实例。"""
         self.agent = agent
 
     def enrich(self, item):
+        """为历史事件补充 turn_id、run_id 和 event_id 字段。"""
         item = dict(item)
         if not item.get("turn_id"):
             current_turn = str(getattr(self.agent, "current_turn_id", "") or "")
@@ -38,11 +44,13 @@ class TurnHistoryBuilder:
         return item
 
     def raw_text(self, history):
+        """将完整历史渲染为未压缩的原始文本。"""
         if not history:
             return "Transcript:\n- empty"
         return "\n".join(["Transcript:", *self._render_turn_lines(history, line_limit=2000)])
 
     def render_section(self, budget):
+        """在给定 budget 内渲染压缩后的历史段。"""
         history = list(getattr(self.agent, "session", {}).get("history", []))
         raw = self.raw_text(history)
         if not history:
@@ -78,6 +86,7 @@ class TurnHistoryBuilder:
         return rendered, details
 
     def _group_turns(self, history):
+        """将历史记录按 turn_id 分组为有序字典。"""
         turns = OrderedDict()
         for item in history:
             turn_id = str(item.get("turn_id") or "legacy")
@@ -85,6 +94,7 @@ class TurnHistoryBuilder:
         return turns
 
     def _compressed_turn_entries(self, turns, recent_turns):
+        """对非最近 turn 进行压缩，生成行列表和压缩明细。"""
         entries = []
         seen_older_reads = set()
         details = {
@@ -123,6 +133,7 @@ class TurnHistoryBuilder:
         return entries, details
 
     def _render_turn_lines(self, history, line_limit):
+        """按行渲染每个 turn 的完整历史。"""
         lines = []
         for turn_id, items in self._group_turns(history).items():
             lines.append(f"Turn {turn_id}:")
@@ -131,6 +142,7 @@ class TurnHistoryBuilder:
         return lines
 
     def _render_item(self, item, line_limit):
+        """渲染单条历史记录为可读文本行。"""
         if item.get("kind") == "compact_summary":
             return str(item.get("content", "")).splitlines()
         if item.get("role") == "tool":
@@ -140,6 +152,7 @@ class TurnHistoryBuilder:
         return [f"[{item.get('role', '')}] {tail_clip(item.get('content', ''), line_limit)}"]
 
     def _reusable_file_summary(self, path):
+        """从 memory 中获取文件摘要（避免重复渲染整个文件内容）。"""
         memory = getattr(self.agent, "memory", None)
         if memory is None or not hasattr(memory, "to_dict"):
             return ""
@@ -147,6 +160,7 @@ class TurnHistoryBuilder:
         return str(summary.get("summary", "")).strip()
 
     def _summarize_old_tool_item(self, item):
+        """对较早的工具调用生成单行摘要。"""
         if item.get("name") == "run_shell":
             command = str(item.get("args", {}).get("command", "")).strip() or "shell"
             lines = [line.strip() for line in str(item.get("content", "")).splitlines() if line.strip()]

@@ -1,1 +1,4 @@
-"""Evaluation and metrics utilities for Iatcoder."""
+"""评估与指标工具。
+
+提供基准测试框架，用于在固定任务上评估模型/agent 的表现，
+以及汇总指标报告生成。"""

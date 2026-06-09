@@ -1,4 +1,7 @@
-"""Sandbox configuration for shell execution."""
+"""沙盒配置。
+
+支持 off / best_effort / required 三种模式，
+以及 bubblewrap 后端，可配置额外的只读路径和拒绝规则。"""
 
 from dataclasses import dataclass
 
@@ -18,10 +21,12 @@ class SandboxConfig:
 
     @property
     def enabled(self):
+        """沙盒是否已启用（非 off）。"""
         return self.mode != "off"
 
 
 def resolve_sandbox_config(values):
+    """从配置字典中解析 SandboxConfig。"""
     sandbox = dict((values or {}).get("sandbox", {}) or {})
     filesystem = dict(sandbox.get("filesystem", {}) or {})
     mode = str(sandbox.get("mode", "off") or "off")

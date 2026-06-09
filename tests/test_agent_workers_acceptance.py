@@ -1,3 +1,4 @@
+"""子 agent 工作线程的验收测试。"""
 import json
 import threading
 import time

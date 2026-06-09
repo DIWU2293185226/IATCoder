@@ -1,8 +1,6 @@
-"""Read-only helpers for Iatcoder run/session evidence.
+"""运行证据只读访问。
 
-These helpers intentionally do not import or instantiate the Iatcoder runtime. They
-only interpret files that a completed CLI/REPL/TUI run left under `.iatcoder/`.
-"""
+不引入 runtime 模块，仅读取 `.iatcoder/` 下已完成的运行工件。"""
 
 from __future__ import annotations
 
@@ -27,6 +25,7 @@ class RunEvidence:
 
     @classmethod
     def latest(cls, workspace: Path) -> "RunEvidence":
+        """从 workspace 中加载最近一次运行的证据。"""
         workspace = Path(workspace).resolve()
         run_dir = _latest_dir(workspace / ".iatcoder" / "runs")
         report_path = _existing(run_dir / "report.json") if run_dir else None
@@ -50,36 +49,45 @@ class RunEvidence:
 
     @property
     def session_id(self) -> str:
+        """获取当前 session 的 ID（从文件名提取）。"""
         return self.session_path.stem if self.session_path else ""
 
     def status(self) -> str:
+        """获取运行状态字符串。"""
         return str(self.report.get("status") or self.task_state.get("status") or "")
 
     def stop_reason(self) -> str:
+        """获取运行停止原因。"""
         return str(self.report.get("stop_reason") or self.task_state.get("stop_reason") or "")
 
     def changed_paths(self) -> list[str]:
+        """获取运行过程中被修改的文件路径列表。"""
         task_changed = self.task_state.get("changed_paths") or []
         graph_changed = ((self.report.get("artifact_graph") or {}).get("changed_paths")) or []
         return list(dict.fromkeys([*task_changed, *graph_changed]))
 
     def tool_events(self, name: str | None = None) -> list[dict]:
+        """获取工具执行事件列表，可按工具名过滤。"""
         events = [event for event in self.trace_events if event.get("event") == "tool_executed"]
         if name is None:
             return events
         return [event for event in events if self.tool_name(event) == name]
 
     def tool_names(self) -> list[str]:
+        """获取所有使用过的工具名称列表。"""
         return [self.tool_name(event) for event in self.tool_events()]
 
     def has_tools(self, *names: str) -> bool:
+        """检查是否使用了指定的一组工具。"""
         seen = set(self.tool_names())
         return all(name in seen for name in names)
 
     def tool_error_codes(self, name: str | None = None) -> list[str]:
+        """获取工具执行中的错误码列表，可按工具名过滤。"""
         return [str(event.get("tool_error_code") or "") for event in self.tool_events(name)]
 
     def full_output_artifacts(self) -> list[str]:
+        """获取运行时生成的全部输出工件路径。"""
         artifacts = [
             str(event.get("full_output_artifact") or "")
             for event in self.tool_events()
@@ -92,10 +100,12 @@ class RunEvidence:
         return list(dict.fromkeys(artifacts))
 
     def runtime_reminder_contains(self, text: str) -> bool:
+        """检查运行时提醒中是否包含指定文本。"""
         haystack = json.dumps(self.report.get("runtime_reminders") or [], ensure_ascii=False)
         return str(text) in haystack
 
     def has_session_event(self, event_name: str, **fields) -> bool:
+        """检查 session 事件流中是否存在匹配的事件。"""
         for event in self.session_events:
             if event.get("event") != event_name:
                 continue
@@ -105,10 +115,12 @@ class RunEvidence:
 
     @staticmethod
     def tool_name(event: dict) -> str:
+        """从事件字典中提取工具名称（兼容多种字段名）。"""
         return str(event.get("name") or event.get("tool_name") or event.get("tool") or "")
 
 
 def _latest_dir(root: Path) -> Path | None:
+    """获取目录中最新修改的子目录。"""
     if not root.exists():
         return None
     dirs = [path for path in root.iterdir() if path.is_dir()]
@@ -116,6 +128,7 @@ def _latest_dir(root: Path) -> Path | None:
 
 
 def _latest_file(root: Path, pattern: str) -> Path | None:
+    """获取目录中最新修改的匹配文件。"""
     if not root.exists():
         return None
     files = sorted(root.glob(pattern), key=lambda path: path.stat().st_mtime)
@@ -123,16 +136,19 @@ def _latest_file(root: Path, pattern: str) -> Path | None:
 
 
 def _existing(path: Path) -> Path | None:
+    """若路径存在则返回，否则返回 None。"""
     return path if path.exists() else None
 
 
 def _read_json(path: Path | None) -> dict:
+    """从文件读取 JSON 字典，文件不存在时返回空字典。"""
     if not path or not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _read_jsonl(path: Path | None) -> list[dict]:
+    """从文件读取 JSONL 列表，文件不存在时返回空列表。"""
     if not path or not path.exists():
         return []
     rows = []

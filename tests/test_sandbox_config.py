@@ -1,3 +1,4 @@
+"""沙盒配置测试。"""
 import pytest
 
 from iatcoder.features.sandbox.config import SandboxConfig, resolve_sandbox_config

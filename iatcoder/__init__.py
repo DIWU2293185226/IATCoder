@@ -1,3 +1,8 @@
+"""Iatcoder 包入口。
+
+对外暴露核心类型和工厂函数，供外部或测试直接 import。
+"""
+
 from .cli import build_agent, build_arg_parser, build_welcome, interaction_mode, main
 from .core.engine import Engine
 from .providers import AnthropicCompatibleModelClient, OpenAICompatibleModelClient

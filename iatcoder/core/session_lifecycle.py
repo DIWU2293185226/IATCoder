@@ -1,4 +1,4 @@
-"""Runtime session switching helpers."""
+"""会话切换和重置辅助函数。"""
 
 import uuid
 from datetime import datetime

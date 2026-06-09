@@ -1,3 +1,4 @@
+"""权限系统验收测试。"""
 import json
 
 from iatcoder.testing import ScriptedModelClient
