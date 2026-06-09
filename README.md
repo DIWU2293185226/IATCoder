@@ -58,13 +58,13 @@ export OPENAI_API_KEY=sk-xxxx
 DEEPSEEK_API_KEY=sk-xxxx
 ```
 
-其他支持的 key 环境变量名（按优先级从高到低）：
+其他支持的 key 环境变量名：
 
-| Provider | API Key 环境变量 | Base URL 环境变量 |
-|----------|-----------------|-------------------|
-| openai | `OPENAI_API_KEY` | `OPENAI_BASE_URL` |
-| anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` |
-| deepseek | `DEEPSEEK_API_KEY` | `DEEPSEEK_BASE_URL` |
+| Provider  | API Key 环境变量        | Base URL 环境变量      |
+|-----------|------------------------|------------------------|
+| openai    | `OPENAI_API_KEY`       | `OPENAI_BASE_URL`      |
+| anthropic | `ANTHROPIC_API_KEY`    | `ANTHROPIC_BASE_URL`   |
+| deepseek  | `DEEPSEEK_API_KEY`     | `DEEPSEEK_BASE_URL`    |
 
 ### 启动
 
@@ -88,18 +88,18 @@ iatcoder --resume latest
 启动后会看到工作台欢迎界面：
 
 ```
-+------------------------------------------------------------------+
-|                                 ^\                                |
-|                       /        //o__o                             |
-|                      /\       /  __/                              |
-|                      \ \______\  /                                |
-|                       \         /                                 |
-|                        \ \----\ \                                 |
-|                         \_\_   \_\_\                              |
-|                         iatcoder                                  |
-|                      local coding agent                           |
-|                    calm shell, ready for work                     |
-+------------------------------------------------------------------+
++------------------------------------------------------------------------------+
+|                                             ^\                               |
+|                                  /        //o__o                             |
+|                                 /\       /  __/                              |
+|                                  \ \______\  /                               |
+|                                    \         /                               |
+|                                     \ \----\ \                               |
+|                                    \_\_   \_\_\                              |
+|                                   iatcoder                                   |
+|                              local coding agent                              |
+|                          calm shell, ready for work                          |
++------------------------------------------------------------------------------+
 ```
 
 ---
@@ -110,11 +110,11 @@ iatcoder --resume latest
 
 iatcoder 支持三种交互模式：
 
-| 模式 | 触发条件 | 说明 |
-|------|---------|------|
-| **TUI** | `iatcoder --tui` 或终端是 tty | 基于 Textual 的终端 UI，功能最完整 |
-| **REPL** | `iatcoder --repl` 或 stdin 不是 tty | 行提示符模式，输入 `iatcoder>` 后开始对话 |
-| **One-shot** | 传入 prompt 参数 | 执行单次请求后退出，适合脚本集成 |
+| 模式       | 触发条件                                | 说明                                                           |
+|------------|----------------------------------------|----------------------------------------------------------------|
+| **TUI**    | `iatcoder --tui` 或终端是 tty          | 基于 Textual 的终端 UI，功能最完整                             |
+| **REPL**   | `iatcoder --repl` 或 stdin 不是 tty    | 行提示符模式，输入 `iatcoder>` 后开始对话                     |
+| **One-shot** | 传入 prompt 参数                      | 执行单次请求后退出，适合脚本集成                               |
 
 默认情况下在终端直接运行会进入 TUI 模式。
 
@@ -123,22 +123,22 @@ iatcoder 支持三种交互模式：
 ```bash
 $ iatcoder --repl
 
-+------------------------------------------------------------------+
-|                                 ^\                                |
-|                       /        //o__o                             |
-|                      /\       /  __/                              |
-|                      \ \______\  /                                |
-|                       \         /                                 |
-|                        \ \----\ \                                 |
-|                         \_\_   \_\_\                              |
-|                         iatcoder                                  |
-|                      local coding agent                           |
-|                    calm shell, ready for work                     |
-+------------------------------------------------------------------+
-| WORKSPACE  /home/user/my-project                                 |
-| MODEL     deepseek-v4-pro   BRANCH          main                  |
-| APPROVAL  ask               SESSION         7a3f2b...             |
-+------------------------------------------------------------------+
++------------------------------------------------------------------------------+
+|                                             ^\                               |
+|                                  /        //o__o                             |
+|                                 /\       /  __/                              |
+|                                  \ \______\  /                               |
+|                                    \         /                               |
+|                                     \ \----\ \                               |
+|                                    \_\_   \_\_\                              |
+|                                   iatcoder                                   |
+|                              local coding agent                              |
+|                          calm shell, ready for work                          |
++------------------------------------------------------------------------------+
+| WORKSPACE  /home/user/my-project                                              |
+| MODEL      deepseek-v4-pro    BRANCH          main                           |
+| APPROVAL   ask                SESSION         7a3f2b...                      |
++------------------------------------------------------------------------------+
 
 iatcoder> 帮我把 src/utils.py 里的 parse_config 函数加上类型注解
 
@@ -149,29 +149,29 @@ iatcoder> /exit   # 退出
 
 ### 命令行参数
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `prompt` | — | 可选的 one-shot prompt |
-| `--provider` | `openai` | Provider profile：`openai` / `anthropic` / `deepseek` |
-| `--model` | provider 默认 | 模型名覆盖 |
-| `--base-url` | provider 默认 | API base URL 覆盖 |
-| `--api-key` | 环境变量 | API key 覆盖 |
-| `--cwd` | `.` | 工作目录 |
-| `--config` | — | TOML 配置文件路径 |
-| `--resume` | — | 恢复指定 session（传 `latest` 恢复最近一个） |
-| `--approval` | `ask` | 审批策略：`ask` / `auto` / `never` |
-| `--sandbox` | `off` | 沙箱模式：`off` / `best_effort` / `required` |
-| `--max-steps` | `50` | 每次请求最大工具/模型迭代次数 |
-| `--max-new-tokens` | provider 感知 | 每次 step 最大输出 token（anthropic: 32000, openai/deepseek: 8192） |
-| `--temperature` | `0.2` | 采样温度 |
-| `--tui` | — | 启动 Textual 终端 UI |
-| `--repl` | — | 使用行式 REPL |
-| `--memory-dir` | — | 记忆目录，默认 `.iatcoder/memory` |
-| `--no-auto-dream` | — | 禁用自动记忆整理 |
-| `--dream-interval` | `24.0` | 自动 dream 间隔（小时） |
-| `--dream-min-sessions` | `5` | 触发 dream 的最少新 session 数 |
-| `--openai-timeout` | `300` | Provider 请求超时（秒） |
-| `--secret-env-name` | — | 追加敏感环境变量名（trace/report 中脱敏） |
+| 参数                   | 默认值            | 说明                                                         |
+|------------------------|-------------------|--------------------------------------------------------------|
+| `prompt`               | —                 | 可选的 one-shot prompt                                       |
+| `--provider`           | `openai`          | Provider profile：`openai` / `anthropic` / `deepseek`        |
+| `--model`              | provider 默认     | 模型名覆盖                                                   |
+| `--base-url`           | provider 默认     | API base URL 覆盖                                            |
+| `--api-key`            | 环境变量          | API key 覆盖                                                 |
+| `--cwd`                | `.`               | 工作目录                                                     |
+| `--config`             | —                 | TOML 配置文件路径                                            |
+| `--resume`             | —                 | 恢复指定 session（传 `latest` 恢复最近一个）                 |
+| `--approval`           | `ask`             | 审批策略：`ask` / `auto` / `never`                           |
+| `--sandbox`            | `off`             | 沙箱模式：`off` / `best_effort` / `required`                 |
+| `--max-steps`          | `50`              | 每次请求最大工具/模型迭代次数                                |
+| `--max-new-tokens`     | provider 感知     | 每次 step 最大输出 token（anthropic: 32000, openai: 8192）   |
+| `--temperature`        | `0.2`             | 采样温度                                                     |
+| `--tui`                | —                 | 启动 Textual 终端 UI                                         |
+| `--repl`               | —                 | 使用行式 REPL                                                |
+| `--memory-dir`         | —                 | 记忆目录，默认 `.iatcoder/memory`                            |
+| `--no-auto-dream`      | —                 | 禁用自动记忆整理                                             |
+| `--dream-interval`     | `24.0`            | 自动 dream 间隔（小时）                                      |
+| `--dream-min-sessions` | `5`               | 触发 dream 的最少新 session 数                               |
+| `--openai-timeout`     | `300`             | Provider 请求超时（秒）                                      |
+| `--secret-env-name`    | —                 | 追加敏感环境变量名（trace/report 中脱敏）                    |
 
 ### TOML 配置文件
 
@@ -198,10 +198,12 @@ mode = "best_effort"
 
 顶层配置（优先于配置文件）：
 
-- `IATCODER_PROVIDER` — 指定 provider
-- `IATCODER_API_KEY` — API key
-- `IATCODER_BASE_URL` — Base URL
-- `IATCODER_MODEL` — 模型名
+| 变量                  | 说明              |
+|-----------------------|-------------------|
+| `IATCODER_PROVIDER`   | 指定 provider     |
+| `IATCODER_API_KEY`    | API key           |
+| `IATCODER_BASE_URL`   | Base URL          |
+| `IATCODER_MODEL`      | 模型名            |
 
 ---
 
@@ -209,29 +211,29 @@ mode = "best_effort"
 
 在 REPL 或 TUI 中输入以下命令：
 
-| 命令 | 说明 |
-|------|------|
-| `/help` | 显示帮助信息 |
-| `/exit` 或 `/quit` | 退出 |
-| `/memory` | 查看长期记忆 |
-| `/working-memory` | 查看工作记忆 |
-| `/remember <text>` | 记录一条笔记到 daily log |
-| `/dream` | 手动触发记忆整理 |
-| `/skills` | 列出可用的 skills |
-| `/plan <topic> [path]` | 进入计划模式 |
-| `/plan-exit` | 退出计划模式 |
-| `/mode` | 查看当前运行时模式 |
-| `/session` | 查看当前 session 信息 |
-| `/usage` | 查看模型用量和上下文统计 |
-| `/model [name]` | 查看或切换模型 |
-| `/history` | 列出所有历史 session |
-| `/resume <id\|index\|latest>` | 恢复指定 session |
-| `/clear` | 开启新 session |
-| `/compact` | 手动压缩对话历史 |
-| `/reset` | 重置当前 session |
-| `/context` | 查看上下文使用详情 |
-| `/agents` | 查看子 agent 状态 |
-| `/subagent <args>` | 运行子 agent |
+| 命令                           | 说明                        |
+|--------------------------------|-----------------------------|
+| `/help`                        | 显示帮助信息                |
+| `/exit` 或 `/quit`             | 退出                        |
+| `/memory`                      | 查看长期记忆                |
+| `/working-memory`              | 查看工作记忆                |
+| `/remember <text>`             | 记录一条笔记到 daily log    |
+| `/dream`                       | 手动触发记忆整理            |
+| `/skills`                      | 列出可用的 skills           |
+| `/plan <topic> [path]`         | 进入计划模式                |
+| `/plan-exit`                   | 退出计划模式                |
+| `/mode`                        | 查看当前运行时模式          |
+| `/session`                     | 查看当前 session 信息       |
+| `/usage`                       | 查看模型用量和上下文统计    |
+| `/model [name]`                | 查看或切换模型              |
+| `/history`                     | 列出所有历史 session        |
+| `/resume <id 或 index 或 latest>` | 恢复指定 session         |
+| `/clear`                       | 开启新 session              |
+| `/compact`                     | 手动压缩对话历史            |
+| `/reset`                       | 重置当前 session            |
+| `/context`                     | 查看上下文使用详情          |
+| `/agents`                      | 查看子 agent 状态           |
+| `/subagent <args>`             | 运行子 agent                |
 
 ---
 
@@ -277,11 +279,11 @@ iatcoder 会自动把 session 中的关键信息整理成**长期记忆**（称�
 
 ## Provider 支持
 
-| Provider | 协议 | 默认模型 | 默认端点 |
-|----------|------|---------|---------|
-| openai | OpenAI 兼容 | gpt-5.4 | `https://www.right.codes/codex/v1` |
-| anthropic | Anthropic | claude-sonnet-4-6 | `https://www.right.codes/claude/v1` |
-| deepseek | Anthropic | deepseek-v4-pro | `https://api.deepseek.com/anthropic` |
+| Provider   | 协议       | 默认模型            | 默认端点                                   |
+|------------|------------|---------------------|--------------------------------------------|
+| openai     | OpenAI 兼容 | gpt-5.4             | `https://www.right.codes/codex/v1`         |
+| anthropic  | Anthropic  | claude-sonnet-4-6   | `https://www.right.codes/claude/v1`        |
+| deepseek   | Anthropic  | deepseek-v4-pro     | `https://api.deepseek.com/anthropic`       |
 
 > 默认端点指向第三方代理 `right.codes`。如果需要直连官方 API，通过 `--base-url` 或配置文件覆盖。
 
