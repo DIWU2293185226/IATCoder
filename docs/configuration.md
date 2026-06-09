@@ -18,9 +18,9 @@ provider 是 TOML 里的一段配置 profile，名字（如 `deepseek` `openai` 
 provider = "deepseek"
 
 [providers.deepseek]
-protocol = "anthropic"
+protocol = "openai"
 api_key = "sk-..."
-base_url = "https://api.deepseek.com/anthropic"
+base_url = "https://api.deepseek.com/v1"
 model = "deepseek-v4-pro"
 
 [providers.openai]

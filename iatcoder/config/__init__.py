@@ -45,8 +45,8 @@ PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
         "model": "claude-sonnet-4-6",
     },
     "deepseek": {
-        "protocol": "anthropic",
-        "base_url": "https://api.deepseek.com/anthropic",
+        "protocol": "openai",
+        "base_url": "https://api.deepseek.com/v1",
         "model": "deepseek-v4-pro",
     },
 }

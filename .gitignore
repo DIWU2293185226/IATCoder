@@ -34,7 +34,6 @@ release/
 tmp/
 .worktrees/
 .iatcoder/
-.pico/
 artifacts/
 readme_intro_locked/
 
@@ -43,9 +42,7 @@ readme_intro_locked/
 .env.*
 !.env.example
 .iatcoder.toml
-.pico.toml
 !.iatcoder.toml.example
-!.pico.toml.example
 
 # Local docs not intended for publication
 docs/**
@@ -59,5 +56,4 @@ docs/**
 .DS_Store
 
 # Packaging metadata
-pico.egg-info/
 iatcoder.egg-info/

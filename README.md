@@ -184,7 +184,7 @@ provider = "deepseek"
 
 [providers.deepseek]
 model = "deepseek-v4-pro"
-base_url = "https://api.deepseek.com/anthropic"
+base_url = "https://api.deepseek.com/v1"
 
 [providers.openai]
 model = "gpt-4o"
@@ -283,9 +283,9 @@ iatcoder 会自动把 session 中的关键信息整理成**长期记忆**（称�
 |------------|------------|---------------------|--------------------------------------------|
 | openai     | OpenAI 兼容 | gpt-5.4             | `https://www.right.codes/codex/v1`         |
 | anthropic  | Anthropic  | claude-sonnet-4-6   | `https://www.right.codes/claude/v1`        |
-| deepseek   | Anthropic  | deepseek-v4-pro     | `https://api.deepseek.com/anthropic`       |
+| deepseek   | OpenAI 兼容 | deepseek-v4-pro     | `https://api.deepseek.com/v1`              |
 
-> 默认端点指向第三方代理 `right.codes`。如果需要直连官方 API，通过 `--base-url` 或配置文件覆盖。
+> 注意：openai 和 anthropic 的默认端点指向第三方代理 `right.codes`。如果需要直连官方 API，通过 `--base-url` 或配置文件覆盖。deepseek 默认直连官方 API。
 
 示例 — 直连 OpenAI：
 
@@ -298,5 +298,5 @@ iatcoder --provider openai --model gpt-4o --base-url https://api.openai.com/v1
 
 ```bash
 export DEEPSEEK_API_KEY=sk-xxx
-iatcoder --provider deepseek --model deepseek-chat --base-url https://api.deepseek.com/v1
+iatcoder --provider deepseek --model deepseek-chat
 ```
